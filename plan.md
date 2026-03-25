@@ -73,7 +73,7 @@ Single dependency, works in browser + Node, well-documented. Everything we need 
 | Backend | NestJS 11 | Already scaffolded. Built-in DI + WS. |
 | DB | Postgres (Neon) + Prisma | Free tier, typed client, painless migrations. |
 | Realtime | Socket.io | De-facto standard; first-class NestJS adapter. |
-| Auth | JWT + Google OAuth | Passport strategies, easy to demo. |
+| Auth | JWT (email + password) | Passport local + JWT strategy. No third-party OAuth. |
 | Crypto | `libsodium-wrappers` | One dep, covers everything. |
 | Media | Cloudinary signed uploads | No server-side proxy needed. |
 | Calls | WebRTC 1:1 + Google STUN | No TURN server to run. Mesh group calls deferred. |
@@ -101,18 +101,80 @@ The server could read every column here and still not read a single message.
 
 ---
 
-## 5. Design Patterns — minimal, honest use
+## 5. Design Patterns
 
-Only six patterns. Each one solves a real problem in this app.
+Six patterns, each tied to a real problem. Written in the Without / Implementation / Benefit format so it maps straight to the writeup.
 
-| Pattern | Where | What it does |
-|---|---|---|
-| **Singleton** | `PrismaService`, client-side `KeyStore` | Prisma client must be one instance (connection pool). Client key cache must be shared across React components. NestJS gives us singletons by default — we just call it out. |
-| **Strategy** | `AuthStrategy` (Local vs Google), `StorageStrategy` (Cloudinary vs local disk in dev) | Same interface, swappable implementations. Passport is literally built on this. |
-| **Factory** | `MessageFactory.create(type, payload)` → `TextMessage` \| `MediaMessage` \| `SystemMessage` | One place that knows how to build + validate each message variant. |
-| **Builder** | `MessageBuilder` on client: `.text(...).attach(...).replyTo(...).encryptFor(members).build()` | Messages have many optional fields; builder beats a constructor with 6 optionals. |
-| **Observer** | RxJS `Subject` on server for chat events; client event bus for "new message" → conversation list + unread badge + toast | Multiple subscribers react to one event. Socket.io is observer-ish already; we make it explicit. |
-| **Decorator** | NestJS `@Injectable`, `@UseGuards(JwtAuthGuard)`, our own `@CurrentUser()` | Free — we just need to use and explain it. |
+### 1. Strategy Pattern — `ChatStorageStrategy`
+
+**Without this pattern:** chat persistence logic is hard-wired to Prisma. Running the app without a database (demo, offline, "Temporary Chat" mode) requires commenting out code or duplicating the chat service.
+
+**Implementation:** define a single `ChatStorageStrategy` interface (`saveMessage`, `loadHistory`, `createConversation`, `addMember`, …). Two implementations live behind it:
+- `DatabaseChatStrategy` — Prisma-backed, durable.
+- `InMemoryChatStrategy` — plain `Map`s, wiped on restart.
+
+A factory provider in `ChatModule` picks one at runtime:
+
+```
+if (!process.env.DATABASE_URL)          → InMemoryChatStrategy
+else if (socket.handshake.query.mode === 'temporary') → InMemoryChatStrategy
+else                                    → DatabaseChatStrategy
+```
+
+The UI exposes a **"Temporary Chat"** toggle on conversation creation. Temporary chats never hit Postgres — ciphertext lives only in the server's memory and the clients' IndexedDB, and it's gone on server restart.
+
+**Benefit:** the whole app still runs with zero database configuration — perfect for graders, demos, and offline development. Swapping storage is a one-line provider change, and the rest of the codebase (gateway, controllers, factory) doesn't know which strategy is active.
+
+### 2. Decorator Pattern
+
+**Without this pattern:** middleware clutters routing logic. Definitions become a long chain of functions (parsing, auth checks, user extraction), reducing readability.
+
+**Implementation:** TypeScript metadata decorators — `@UseGuards(JwtAuthGuard)` for security, custom `@CurrentUser()` to extract JWT payload cleanly, `@Injectable()` for DI.
+
+**Benefit:** core business logic stays pristine. Security and routing concerns are applied transparently without altering the underlying function body.
+
+### 3. Observer Pattern (Pub/Sub)
+
+**Without this pattern:** handling thousands of concurrent socket events (typing, messages, presence) synchronously leads to blocking operations and UI latency.
+
+**Implementation:** a reactive architecture using **RxJS streams** and **Event Emitters**. Services publish events (`message.created`, `user.typing`, `call.incoming`) to subjects. WebSocket gateways act as observers and broadcast to the relevant rooms.
+
+**Benefit:** decouples database/storage operations from WebSocket broadcasting. The UI stays reactive under load and new subscribers (notifications, unread badges, analytics) can plug in without touching the publisher.
+
+### 4. Singleton Pattern
+
+**Without this pattern:** accidentally establishing multiple database connection pools or duplicated utility instances causes severe memory leaks and connection exhaustion.
+
+**Implementation:** NestJS providers act as strict singletons. `PrismaService` instantiates exactly once on boot; every controller accesses the same global instance. On the client, `KeyStore` is a module-scoped singleton so all React components share the in-memory key cache.
+
+**Benefit:** one optimized connection pool to the database, one source of truth for keys in the browser — no connection exhaustion, no desynced caches.
+
+### 5. Factory Pattern — `MessageFactory`
+
+**Without this pattern:** the gateway has a sprawling `switch` on message `type` with inline validation for every variant, and adding a new message type means editing three files.
+
+**Implementation:** `MessageFactory.create(type, payload)` returns a concrete `TextMessage`, `MediaMessage`, or `SystemMessage`, each with its own validation and serialization.
+
+**Benefit:** one place to add a new message variant. The gateway just calls the factory and forwards the result.
+
+### 6. Builder Pattern — `MessageBuilder`
+
+**Without this pattern:** constructing a message on the client means calling a constructor with 6+ optional arguments (`text`, `attachment`, `replyTo`, `recipients`, `nonce`, `conversationKey`) in a fixed order — unreadable and error-prone.
+
+**Implementation:** a fluent builder on the client:
+
+```ts
+await new MessageBuilder()
+  .text('hello')
+  .attach(file)
+  .replyTo(messageId)
+  .encryptFor(conversationKey)
+  .build();
+```
+
+**Benefit:** readable call sites, validation happens in `.build()`, and encryption is guaranteed to be the last step before transport.
+
+---
 
 We **skip Prototype** — no honest use case here. Better to use 6 patterns well than force a 7th.
 
@@ -123,8 +185,8 @@ We **skip Prototype** — no honest use case here. Better to use 6 patterns well
 Each milestone ends with something demoable.
 
 1. **M0 · Foundations** — Prisma + Neon connected, NestJS modules (`auth`, `users`, `chat`, `media`) scaffolded, Next.js shell with a login page placeholder.
-2. **M1 · Auth** — email+password signup/login, JWT + refresh cookie, `JwtAuthGuard`, Google OAuth, protected `/app` route.
-3. **M2 · Plaintext chat** — Socket.io gateway, create DM, send/receive messages, conversation list, delivery receipt. **No crypto yet.**
+2. **M1 · Auth** — email+password signup/login, JWT + refresh cookie, `JwtAuthGuard`, `@CurrentUser()` decorator, protected `/app` route.
+3. **M2 · Plaintext chat + Storage Strategy** — Socket.io gateway, create DM, send/receive, conversation list, delivery receipt. Ship `ChatStorageStrategy` with both `Database` and `InMemory` implementations + the "Temporary Chat" toggle. **No crypto yet.**
 4. **M3 · E2EE layer** — key generation on signup, key bundle upload, `ConversationKey` wrap/unwrap, encrypt on send / decrypt on receive. Swap the M2 pipes to carry ciphertext.
 5. **M4 · Groups** — group creation, add/remove members, rotate conversation key on membership change.
 6. **M5 · Media** — Cloudinary signed upload endpoint, client-side encrypt-then-upload, decrypt-then-render.
@@ -138,9 +200,14 @@ Stretch (only if time allows): typing indicators, read receipts, presence, dark 
 
 ```
 relay-backend/src/
-  auth/         controllers, guards, strategies (Local, Google, JWT)
+  auth/         controllers, guards, passport strategies (Local, JWT)
   users/        user + key-bundle endpoints
   chat/         rest controllers + socket gateway + message factory
+                storage/
+                  chat-storage.strategy.ts       (interface)
+                  database-chat.strategy.ts      (Prisma-backed)
+                  in-memory-chat.strategy.ts     (Map-backed)
+                  chat-storage.provider.ts       (picks one at runtime)
   media/        cloudinary signed-upload endpoint
   common/       prisma.service, decorators (@CurrentUser)
   app.module.ts

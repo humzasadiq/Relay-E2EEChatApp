@@ -1,8 +1,25 @@
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3000);
+  const config = app.get(ConfigService);
+
+  app.use(cookieParser());
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, transform: true }),
+  );
+  app.enableCors({
+    origin: config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000',
+    credentials: true,
+  });
+
+  const port = Number(config.get<string>('PORT') ?? 4000);
+  await app.listen(port);
+  // eslint-disable-next-line no-console
+  console.log(`Relay backend listening on :${port}`);
 }
 bootstrap();

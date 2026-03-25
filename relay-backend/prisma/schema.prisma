@@ -1,0 +1,129 @@
+// Relay — E2EE chat. Server stores ciphertext only.
+// The storage strategy decides whether rows land here or in memory.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String
+  avatarUrl    String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  keyBundle   KeyBundle?
+  memberships Membership[]
+  messages    Message[]
+  sessions    Session[]
+  convKeys    ConversationKey[]
+}
+
+/// Public key material uploaded by the client on signup.
+/// `wrappedPrivateKeys` is an opaque ciphertext blob — the server
+/// cannot decrypt it. It exists here only so the user can sync keys
+/// across reinstalls by re-entering their password.
+model KeyBundle {
+  userId             String   @id
+  identityPubKey     String
+  exchangePubKey     String
+  wrappedPrivateKeys String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id        String           @id @default(cuid())
+  type      ConversationType
+  name      String?
+  createdAt DateTime         @default(now())
+
+  memberships Membership[]
+  messages    Message[]
+  keys        ConversationKey[]
+}
+
+model Membership {
+  userId         String
+  conversationId String
+  role           MembershipRole @default(MEMBER)
+  joinedAt       DateTime       @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, conversationId])
+  @@index([conversationId])
+}
+
+/// Per-user wrapped copy of the conversation symmetric key. Opaque to the server.
+model ConversationKey {
+  userId         String
+  conversationId String
+  wrappedKey     String
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, conversationId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  ciphertext     String
+  nonce          String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  media        MediaAsset[]
+
+  @@index([conversationId, createdAt])
+}
+
+/// Plaintext metadata only. File bytes on Cloudinary are already ciphertext.
+model MediaAsset {
+  id            String   @id @default(cuid())
+  messageId     String
+  cloudinaryUrl String
+  mime          String
+  size          Int
+  createdAt     DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  refreshTokenHash String   @unique
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
