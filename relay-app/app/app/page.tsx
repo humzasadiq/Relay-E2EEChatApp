@@ -1,32 +1,36 @@
 "use client";
 
-import { useAuth } from "../lib/auth-store";
-
 export default function AppHome() {
-  const { user, logout } = useAuth();
-
   return (
-    <main className="flex flex-1 flex-col items-center justify-center px-6 py-24 gap-8 text-center">
-      <div className="flex flex-col gap-2 max-w-xl">
-        <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-          Relay
-        </span>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Welcome, {user?.displayName}
-        </h1>
-        <p className="text-zinc-500">
-          You are logged in as{" "}
-          <span className="font-mono">{user?.email}</span>. M2 will land real
-          conversations here.
+    <main className="flex-1 flex items-center justify-center px-8 text-center">
+      <div className="flex flex-col items-center gap-4 max-w-md">
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--primary), var(--accent))",
+          }}
+        >
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </div>
+        <h1 className="text-xl font-semibold">Welcome to Relay</h1>
+        <p className="text-sm text-muted leading-relaxed">
+          Select a conversation from the sidebar, or tap + to start a new one.
+          Messages are end-to-end encrypted — the server only ever sees
+          ciphertext.
         </p>
       </div>
-
-      <button
-        onClick={logout}
-        className="rounded-full border border-black/10 dark:border-white/15 px-6 py-3 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5"
-      >
-        Log out
-      </button>
     </main>
   );
 }

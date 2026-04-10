@@ -46,7 +46,7 @@ export function AuthForm({ mode }: Props) {
           minLength={2}
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-4 py-3 text-sm outline-none focus:border-black/30 dark:focus:border-white/30"
+          className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm outline-none focus:border-primary"
         />
       )}
       <input
@@ -55,7 +55,7 @@ export function AuthForm({ mode }: Props) {
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-4 py-3 text-sm outline-none focus:border-black/30 dark:focus:border-white/30"
+        className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm outline-none focus:border-primary"
       />
       <input
         type="password"
@@ -64,17 +64,17 @@ export function AuthForm({ mode }: Props) {
         minLength={8}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="rounded-md border border-black/10 dark:border-white/15 bg-transparent px-4 py-3 text-sm outline-none focus:border-black/30 dark:focus:border-white/30"
+        className="rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm outline-none focus:border-primary"
       />
       {error && (
-        <p className="text-xs text-red-500" role="alert">
+        <p className="text-xs text-danger" role="alert">
           {error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 rounded-full bg-foreground text-background px-6 py-3 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+        className="mt-2 rounded-full bg-primary text-on-primary px-6 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {pending ? "…" : mode === "signup" ? "Create account" : "Log in"}
       </button>

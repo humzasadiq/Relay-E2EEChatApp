@@ -14,6 +14,26 @@ export interface AuthResponse {
   accessToken: string;
 }
 
+export interface Conversation {
+  id: string;
+  type: "DIRECT" | "GROUP";
+  name: string | null;
+  memberIds: string[];
+  /** displayName keyed by userId — populated by the backend */
+  memberNames: Record<string, string>;
+  temporary: boolean;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  ciphertext: string;
+  nonce: string;
+  createdAt: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -23,14 +43,20 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit & { accessToken?: string } = {},
+): Promise<T> {
+  const { accessToken, ...rest } = init;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((rest.headers as Record<string, string>) ?? {}),
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    ...rest,
+    headers,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -58,7 +84,42 @@ export const api = {
     request<{ accessToken: string }>("/auth/refresh", { method: "POST" }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   me: (accessToken: string) =>
-    request<PublicUser>("/auth/me", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    request<PublicUser>("/auth/me", { accessToken }),
+
+  searchUsers: (accessToken: string, email: string) =>
+    request<PublicUser[]>(
+      `/users/search?email=${encodeURIComponent(email)}`,
+      { accessToken },
+    ),
+
+  updateProfile: (accessToken: string, body: { displayName?: string }) =>
+    request<PublicUser>("/users/me", {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify(body),
     }),
+
+  listConversations: (accessToken: string) =>
+    request<Conversation[]>("/chat/conversations", { accessToken }),
+
+  createConversation: (
+    accessToken: string,
+    body: {
+      type: "DIRECT" | "GROUP";
+      memberIds: string[];
+      name?: string;
+      temporary?: boolean;
+    },
+  ) =>
+    request<Conversation>("/chat/conversations", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify(body),
+    }),
+
+  getHistory: (accessToken: string, conversationId: string) =>
+    request<ChatMessage[]>(
+      `/chat/conversations/${conversationId}/messages`,
+      { accessToken },
+    ),
 };

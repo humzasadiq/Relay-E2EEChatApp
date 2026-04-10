@@ -1,26 +1,262 @@
 @import "tailwindcss";
 
+/* ── Light (default) ───────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --text: #0c0d0e;
+  --background: #f8fafc;
+  --primary: #2e6ee5;
+  --secondary: #8face5;
+  --accent: #2760d3;
+
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --surface-hover: #e2e8f2;
+  --border: rgba(12, 13, 14, 0.09);
+  --border-strong: rgba(12, 13, 14, 0.18);
+  --muted: #64748b;
+  --bubble-in: #e9eef7;
+  --bubble-out: #2e6ee5;
+  --bubble-out-text: #ffffff;
+  --danger: #dc2626;
+  --on-primary: #ffffff;
+
+  /* Nav rail — light mode: soft blue-grey strip */
+  --nav-bg: #dde3ef;
+  --nav-border: rgba(12, 13, 14, 0.08);
+  --nav-icon: rgba(12, 13, 14, 0.45);
+  --nav-icon-active: #2e6ee5;
+  --nav-icon-active-bg: rgba(46, 110, 229, 0.12);
+
+  --badge: #ef4444;
 }
 
+/* ── Dark ───────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --text: #f1f2f3;
+  --background: #030507;
+  --primary: #1a5ad1;
+  --secondary: #1a3770;
+  --accent: #2c65d8;
+
+  --surface: #0b1117;
+  --surface-2: #111a24;
+  --surface-hover: #17222f;
+  --border: rgba(241, 242, 243, 0.07);
+  --border-strong: rgba(241, 242, 243, 0.15);
+  --muted: #8a95a3;
+  --bubble-in: #17222f;
+  --bubble-out: #1a5ad1;
+  --bubble-out-text: #ffffff;
+  --danger: #f87171;
+  --on-primary: #ffffff;
+
+  /* Nav rail — dark mode */
+  --nav-bg: #060c12;
+  --nav-border: rgba(241, 242, 243, 0.06);
+  --nav-icon: rgba(241, 242, 243, 0.4);
+  --nav-icon-active: #ffffff;
+  --nav-icon-active-bg: rgba(255, 255, 255, 0.12);
+
+  --badge: #ef4444;
+}
+
+/* Force light when explicitly set */
+:root[data-theme="light"] {
+  --text: #0c0d0e;
+  --background: #f8fafc;
+  --primary: #2e6ee5;
+  --secondary: #8face5;
+  --accent: #2760d3;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --surface-hover: #e2e8f2;
+  --border: rgba(12, 13, 14, 0.09);
+  --border-strong: rgba(12, 13, 14, 0.18);
+  --muted: #64748b;
+  --bubble-in: #e9eef7;
+  --bubble-out: #2e6ee5;
+  --bubble-out-text: #ffffff;
+  --danger: #dc2626;
+  --on-primary: #ffffff;
+  
+  --nav-bg: #ffffff;
+  --nav-border: rgba(12, 13, 14, 0.08);
+  --nav-icon: rgba(12, 13, 14, 0.45);
+  --nav-icon-active: #2e6ee5;
+  --nav-icon-active-bg: rgba(46, 110, 229, 0.12);
+  --badge: #ef4444;
+}
+
+/* System preference fallback (before JS runs / no attribute set) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --text: #f1f2f3;
+    --background: #030507;
+    --primary: #1a5ad1;
+    --secondary: #1a3770;
+    --accent: #2c65d8;
+    --surface: #0b1117;
+    --surface-2: #111a24;
+    --surface-hover: #17222f;
+    --border: rgba(241, 242, 243, 0.07);
+    --border-strong: rgba(241, 242, 243, 0.15);
+    --muted: #8a95a3;
+    --bubble-in: #17222f;
+    --bubble-out: #1a5ad1;
+    --bubble-out-text: #ffffff;
+    --danger: #f87171;
+    --on-primary: #ffffff;
+    --nav-bg: #060c12;
+    --nav-border: rgba(241, 242, 243, 0.06);
+    --nav-icon: rgba(241, 242, 243, 0.4);
+    --nav-icon-active: #ffffff;
+    --nav-icon-active-bg: rgba(255, 255, 255, 0.12);
+    --badge: #ef4444;
+  }
+}
+
+/* ── Tailwind v4 token mapping ──────────────────────────────────────── */
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-text: var(--text);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-muted: var(--muted);
+  --color-danger: var(--danger);
+  --color-on-primary: var(--on-primary);
+  --color-bubble-in: var(--bubble-in);
+  --color-bubble-out: var(--bubble-out);
+  --color-bubble-out-text: var(--bubble-out-text);
+  --color-nav-bg: var(--nav-bg);
+  --color-badge: var(--badge);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--background);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* ── frimousse emoji picker ─────────────────────────────────────── */
+[frimousse-root] {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+[frimousse-viewport] {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Emoji buttons — 32×32, rounded, hover state */
+[frimousse-emoji] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: background 80ms;
+  flex-shrink: 0;
+}
+
+[frimousse-emoji][data-active],
+[frimousse-emoji]:hover {
+  background: var(--surface-hover);
+}
+
+[frimousse-row] {
+  padding-inline: 6px;
+  scroll-margin-block: 12px;
+}
+
+[frimousse-category-header] {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+[frimousse-skin-tone-selector] {
+  font-size: 1.15rem;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 80ms;
+}
+
+[frimousse-skin-tone-selector]:hover {
+  background: var(--surface-hover);
+}
+
+[frimousse-search] {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+
+[frimousse-search]::-webkit-search-cancel-button {
+  display: none;
+}
+
+[frimousse-search]::placeholder {
+  color: var(--muted);
+}
+
+[frimousse-loading],
+[frimousse-empty] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 24px;
+  font-size: 13px;
+  color: var(--muted);
 }

@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "boring-avatars": "^2.0.4",
+    "frimousse": "^0.3.0",
     "libsodium-wrappers": "^0.8.3",
     "next": "16.2.3",
     "react": "19.2.4",

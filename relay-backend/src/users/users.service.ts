@@ -76,6 +76,28 @@ export class UsersService {
     return this.byId.get(id) ?? null;
   }
 
+  async update(
+    id: string,
+    patch: { displayName?: string },
+  ): Promise<UserRecord | null> {
+    if (this.usingDb) {
+      const u = await this.prisma.user.update({
+        where: { id },
+        data: patch,
+      });
+      return toRecord(u);
+    }
+    const existing = this.byId.get(id);
+    if (!existing) return null;
+    const updated: UserRecord = {
+      ...existing,
+      displayName: patch.displayName ?? existing.displayName,
+    };
+    this.byId.set(id, updated);
+    this.byEmail.set(updated.email.toLowerCase(), updated);
+    return updated;
+  }
+
   static toPublic(user: UserRecord): PublicUser {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, ...rest } = user;

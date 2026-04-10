@@ -17,6 +17,7 @@ interface AuthState {
   login: (input: { email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
+  updateProfile: (input: { displayName?: string }) => Promise<void>;
 }
 
 /**
@@ -84,5 +85,12 @@ export const useAuth = create<AuthState>((set, get) => ({
     } catch {
       set({ user: null, accessToken: null, status: "ready" });
     }
+  },
+
+  async updateProfile(input) {
+    const token = get().accessToken;
+    if (!token) return;
+    const user = await api.updateProfile(token, input);
+    set({ user });
   },
 }));
