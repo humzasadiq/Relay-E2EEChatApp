@@ -69,9 +69,11 @@ export function NewChatDialog({ open, onClose }: Props) {
     >
       <div
         className="w-full max-w-sm rounded-2xl bg-surface border border-border-strong shadow-2xl flex flex-col overflow-hidden"
+          style={{ borderColor: 'var(--border)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <header className="flex items-center justify-between px-6 py-4 border-b border-border"
+          style={{ borderColor: 'var(--border)' }}>
           <div className="flex flex-col">
             <h2 className="text-lg font-semibold">New chat</h2>
             <p className="text-xs text-muted">Find an existing Relay user.</p>
@@ -99,6 +101,7 @@ export function NewChatDialog({ open, onClose }: Props) {
                 }
               }}
               className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-primary"
+              style={{ borderColor: 'var(--border)' }}
             />
             <button
               onClick={search}
@@ -110,7 +113,8 @@ export function NewChatDialog({ open, onClose }: Props) {
           </div>
 
           {candidate && (
-            <div className="rounded-xl border border-border bg-surface-2 p-3 flex items-center gap-3">
+            <div className="rounded-xl border border-border bg-surface-2 p-3 flex items-center gap-3"
+            style={{ borderColor: 'var(--border)' }}>
               <Avatar name={candidate.email} size={40} />
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">
@@ -126,7 +130,8 @@ export function NewChatDialog({ open, onClose }: Props) {
           {error && <p className="text-xs text-danger">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-border bg-surface-2">
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-border bg-surface-2"
+        style={{ borderColor: 'var(--border)' }}>
           <button
             onClick={close}
             className="rounded-lg px-4 py-2 text-sm font-medium hover:bg-surface-hover"

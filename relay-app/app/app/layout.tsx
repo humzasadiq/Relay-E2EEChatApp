@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NavRail } from "../_components/nav-rail";
-import { NewChatDialog } from "../_components/new-chat-dialog";
 import { Sidebar } from "../_components/sidebar";
 import { useAuth } from "../lib/auth-store";
 import { useChat } from "../lib/chat-store";
@@ -19,7 +18,6 @@ export default function AppLayout({
   const { status, user, accessToken, hydrate } = useAuth();
   const { receive, loadConversations, reset, setTempSession, clearTempSession } = useChat();
   const [activeSection, setActiveSection] = useState<"chats" | "calls">("chats");
-  const [newChatOpen, setNewChatOpen] = useState(false);
 
   useThemeSync();
 
@@ -84,18 +82,13 @@ export default function AppLayout({
         <NavRail active={activeSection} onSelect={setActiveSection} />
 
         {/* Column 2: conversation sidebar */}
-        <Sidebar onNewChat={() => setNewChatOpen(true)} />
+        <Sidebar />
 
         {/* Column 3: active chat / empty state */}
         <section className="flex-1 flex flex-col min-w-0 bg-background">
           {children}
         </section>
       </div>
-
-      <NewChatDialog
-        open={newChatOpen}
-        onClose={() => setNewChatOpen(false)}
-      />
     </>
   );
 }
