@@ -8,6 +8,7 @@ import {
 } from "frimousse";
 import { useParams } from "next/navigation";
 import {
+  Fragment,
   FormEvent,
   useCallback,
   useEffect,
@@ -51,6 +52,14 @@ function convLabel(conv: Conversation, myId: string) {
     return "Direct message";
   }
   return "Group";
+}
+
+function convAvatarSeed(conv: Conversation, myId: string): string {
+  if (conv.type === "DIRECT") {
+    const otherId = conv.memberIds.find((id) => id !== myId);
+    if (otherId && conv.memberEmails[otherId]) return conv.memberEmails[otherId];
+  }
+  return conv.name ?? conv.id;
 }
 
 /* ── sender colour for group chats (deterministic per-userId) ──────── */
@@ -219,8 +228,15 @@ function EmojiPickerPopover({
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
   const { user, accessToken } = useAuth();
-  const { conversations, messagesByConv, openConversation, sendMessage, markRead } =
-    useChat();
+  const {
+    conversations,
+    messagesByConv,
+    openConversation,
+    sendMessage,
+    markRead,
+    tempSessionByConv,
+    toggleTempSession,
+  } = useChat();
 
   const conv = useMemo(
     () => conversations.find((c) => c.id === id) ?? null,
@@ -234,6 +250,8 @@ export default function ChatPage() {
 
   const myId = user?.id ?? "";
   const title = conv ? convLabel(conv, myId) : "…";
+  const tempSince = conv ? (tempSessionByConv[conv.id] ?? null) : null;
+  const isTempActive = tempSince !== null;
 
   useEffect(() => {
     if (accessToken && id) openConversation(accessToken, id);
@@ -269,12 +287,12 @@ export default function ChatPage() {
     <main className="flex-1 flex flex-col min-h-0">
       {/* Header */}
       <header className="flex items-center gap-3 px-5 py-3 border-b bg-surface shrink-0" style={{ borderColor: "var(--border)" }}>
-        <Avatar name={title} size={40} />
+        <Avatar name={conv ? convAvatarSeed(conv, myId) : title} size={40} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold truncate">{title}</span>
             {conv?.temporary && (
-              <span className="text-[10px] uppercase tracking-widest rounded-full px-2 py-0.5" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>
+              <span className="text-[10px] uppercase tracking-widest rounded-full px-2 py-0.5 cursor-pointer" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>
                 Temporary
               </span>
             )}
@@ -283,6 +301,27 @@ export default function ChatPage() {
         </div>
         {/* Header actions */}
         <div className="flex items-center gap-1">
+          {/* Temporary chat toggle */}
+          <button
+            onClick={() => conv && accessToken && toggleTempSession(accessToken, conv.id)}
+            title={isTempActive ? "End temporary chat" : "Start temporary chat"}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+            style={{
+              background: isTempActive ? "var(--primary)" : "transparent",
+              color: isTempActive ? "var(--on-primary)" : "var(--muted)",
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13.5 3.1c-.5 0-1-.1-1.5-.1s-1 .1-1.5.1" />
+              <path d="M19.3 6.8a10.45 10.45 0 0 0-2.1-2.1" />
+              <path d="M20.9 13.5c.1-.5.1-1 .1-1.5s-.1-1-.1-1.5" />
+              <path d="M17.2 19.3a10.45 10.45 0 0 0 2.1-2.1" />
+              <path d="M10.5 20.9c.5.1 1 .1 1.5.1s1-.1 1.5-.1" />
+              <path d="M3.5 17.5 2 22l4.5-1.5" />
+              <path d="M3.1 10.5c0 .5-.1 1-.1 1.5s.1 1 .1 1.5" />
+              <path d="M6.8 4.7a10.45 10.45 0 0 0-2.1 2.1" />
+            </svg>
+          </button>
           {[
             <svg key="video" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>,
             <svg key="call" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.75h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>,
@@ -308,7 +347,7 @@ export default function ChatPage() {
       {/* Messages */}
       <div
         ref={scrollerRef}
-        className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-0"
+        className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-0"
       >
         {messages.length === 0 && (
           <p className="text-sm text-muted text-center my-auto">
@@ -317,6 +356,12 @@ export default function ChatPage() {
         )}
         {messages.map((m, i) => {
           const mine = m.senderId === myId;
+          const isFirstTempMsg = Boolean(
+            isTempActive &&
+              tempSince &&
+              new Date(m.createdAt) >= new Date(tempSince) &&
+              (i === 0 || new Date(messages[i - 1].createdAt) < new Date(tempSince)),
+          );
           const prev = messages[i - 1];
           const next = messages[i + 1];
           const created = new Date(m.createdAt);
@@ -334,7 +379,17 @@ export default function ChatPage() {
               : null;
 
           return (
-            <div key={m.id} className="flex flex-col">
+            <Fragment key={m.id}>
+              {isFirstTempMsg && (
+                <div className="flex items-center gap-3 my-3 px-1">
+                  <div className="flex-1 h-px" style={{ background: "var(--border-strong)" }} />
+                  <span className="text-[11px] font-medium shrink-0" style={{ color: "var(--muted)" }}>
+                    Temporary Chat Started
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: "var(--border-strong)" }} />
+                </div>
+              )}
+            <div className="flex flex-col">
               {showDay && (
                 <div className="self-center my-4 text-[11px] uppercase tracking-widest text-muted bg-surface-2 rounded-full px-3 py-1">
                   {dayLabel(created)}
@@ -349,7 +404,7 @@ export default function ChatPage() {
                 {!mine && (
                   <div className="mr-2 self-end">
                     {isLastInGroup ? (
-                      <Avatar name={senderName ?? title} size={28} />
+                      <Avatar name={conv?.memberEmails[m.senderId] ?? senderName ?? title} size={28} />
                     ) : (
                       <div className="w-7" />
                     )}
@@ -396,8 +451,19 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
+            </Fragment>
           );
         })}
+        {/* Divider at end when session is active but no temp messages yet */}
+        {isTempActive && !messages.some((m) => tempSince && new Date(m.createdAt) >= new Date(tempSince)) && (
+          <div className="flex items-center gap-3 my-3 px-1">
+            <div className="flex-1 h-px" style={{ background: "var(--border-strong)" }} />
+            <span className="text-[11px] font-medium shrink-0" style={{ color: "var(--muted)" }}>
+              Temporary Chat Started
+            </span>
+            <div className="flex-1 h-px" style={{ background: "var(--border-strong)" }} />
+          </div>
+        )}
       </div>
 
       {/* Input bar */}

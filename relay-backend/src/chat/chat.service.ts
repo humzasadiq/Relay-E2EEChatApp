@@ -18,6 +18,15 @@ export interface MessageCreatedEvent {
   message: StoredMessage;
 }
 
+export interface TempSessionEvent {
+  conversationId: string;
+  since: Date;
+}
+
+export interface ConversationCreatedEvent {
+  conv: StoredConversation;
+}
+
 @Injectable()
 export class ChatService {
   /**
@@ -26,22 +35,36 @@ export class ChatService {
    * plug in without touching the publish site below.
    */
   readonly messageCreated$ = new Subject<MessageCreatedEvent>();
+  readonly conversationCreated$ = new Subject<ConversationCreatedEvent>();
+  readonly tempStarted$ = new Subject<TempSessionEvent>();
+  readonly tempEnded$ = new Subject<TempSessionEvent>();
+
+  /** In-memory map of conversationId → session start time */
+  private readonly tempSessions = new Map<string, Date>();
 
   constructor(
     @Inject(CHAT_STORAGE) private readonly storage: ChatStorageStrategy,
   ) {}
 
-  createConversation(
+  async createConversation(
     creatorId: string,
     input: Omit<CreateConversationInput, 'memberIds'> & { memberIds: string[] },
   ): Promise<StoredConversation> {
-    const memberIds = Array.from(
-      new Set([creatorId, ...input.memberIds]),
-    );
+    const memberIds = Array.from(new Set([creatorId, ...input.memberIds]));
     if (input.type === 'DIRECT' && memberIds.length !== 2) {
       throw new ForbiddenException('Direct conversations need exactly 2 members');
     }
-    return this.storage.createConversation({ ...input, memberIds });
+    // Find-or-create: reuse an existing DM rather than creating duplicates
+    if (input.type === 'DIRECT') {
+      const existing = await this.storage.findDirectConversation(
+        memberIds[0],
+        memberIds[1],
+      );
+      if (existing) return existing;
+    }
+    const conv = await this.storage.createConversation({ ...input, memberIds });
+    this.conversationCreated$.next({ conv });
+    return conv;
   }
 
   listConversations(userId: string): Promise<StoredConversation[]> {
@@ -70,6 +93,29 @@ export class ChatService {
       message,
     });
     return message;
+  }
+
+  getTempSession(conversationId: string): Date | null {
+    return this.tempSessions.get(conversationId) ?? null;
+  }
+
+  async toggleTempSession(
+    conversationId: string,
+    userId: string,
+  ): Promise<{ started: boolean; since: Date }> {
+    await this.requireMember(conversationId, userId);
+    const existing = this.tempSessions.get(conversationId);
+    if (existing) {
+      this.tempSessions.delete(conversationId);
+      await this.storage.deleteMessagesSince(conversationId, existing);
+      this.tempEnded$.next({ conversationId, since: existing });
+      return { started: false, since: existing };
+    } else {
+      const since = new Date();
+      this.tempSessions.set(conversationId, since);
+      this.tempStarted$.next({ conversationId, since });
+      return { started: true, since };
+    }
   }
 
   async findMembership(

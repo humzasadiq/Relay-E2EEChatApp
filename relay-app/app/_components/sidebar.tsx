@@ -18,6 +18,14 @@ function convLabel(conv: Conversation, myId: string): string {
   return "Group";
 }
 
+function convAvatarSeed(conv: Conversation, myId: string): string {
+  if (conv.type === "DIRECT") {
+    const otherId = conv.memberIds.find((id) => id !== myId);
+    if (otherId && conv.memberEmails[otherId]) return conv.memberEmails[otherId];
+  }
+  return conv.name ?? conv.id;
+}
+
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
@@ -63,7 +71,7 @@ export function Sidebar({ onNewChat }: Props) {
 
   return (
     <>
-      <div className="w-[320px] shrink-0 h-full flex flex-col border-r bg-surface overflow-hidden" style={{ borderColor: "var(--border)" }}>
+      <div className="w-[320px] shrink-0 flex flex-col border-r bg-surface overflow-hidden" style={{ borderColor: "var(--border)" }}>
         {/* Header */}
         <header className="flex items-center justify-between px-4 py-3.5 border-b" style={{ borderColor: "var(--border)" }}>
           <h2 className="text-base font-semibold">Chats</h2>
@@ -130,7 +138,7 @@ export function Sidebar({ onNewChat }: Props) {
                       if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent";
                     }}
                   >
-                    <Avatar name={label} size={48} />
+                    <Avatar name={convAvatarSeed(c, myId)} size={48} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-1">
                         <span

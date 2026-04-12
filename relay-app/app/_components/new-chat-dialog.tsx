@@ -18,7 +18,6 @@ export function NewChatDialog({ open, onClose }: Props) {
   const { startDirect } = useChat();
 
   const [email, setEmail] = useState("");
-  const [temporary, setTemporary] = useState(false);
   const [candidate, setCandidate] = useState<PublicUser | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +27,6 @@ export function NewChatDialog({ open, onClose }: Props) {
   const reset = () => {
     setEmail("");
     setCandidate(null);
-    setTemporary(false);
     setError(null);
   };
 
@@ -56,7 +54,7 @@ export function NewChatDialog({ open, onClose }: Props) {
   const startChat = async () => {
     if (!accessToken || !candidate) return;
     try {
-      const conv = await startDirect(accessToken, candidate, { temporary });
+      const conv = await startDirect(accessToken, candidate, { temporary: false });
       close();
       router.push(`/app/chat/${conv.id}`);
     } catch (e) {
@@ -113,7 +111,7 @@ export function NewChatDialog({ open, onClose }: Props) {
 
           {candidate && (
             <div className="rounded-xl border border-border bg-surface-2 p-3 flex items-center gap-3">
-              <Avatar name={candidate.displayName} size={40} />
+              <Avatar name={candidate.email} size={40} />
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">
                   {candidate.displayName}
@@ -124,21 +122,6 @@ export function NewChatDialog({ open, onClose }: Props) {
               </div>
             </div>
           )}
-
-          <label className="flex items-start gap-3 text-sm cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={temporary}
-              onChange={(e) => setTemporary(e.target.checked)}
-              className="mt-0.5 accent-primary"
-            />
-            <span>
-              <span className="font-medium">Temporary chat</span>
-              <span className="block text-xs text-muted">
-                Kept in server memory only — wiped on restart.
-              </span>
-            </span>
-          </label>
 
           {error && <p className="text-xs text-danger">{error}</p>}
         </div>

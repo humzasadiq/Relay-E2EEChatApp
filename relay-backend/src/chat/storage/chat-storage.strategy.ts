@@ -62,7 +62,25 @@ export abstract class ChatStorageStrategy {
     limit?: number,
   ): Promise<StoredMessage[]>;
 
+  /**
+   * Find an existing DIRECT conversation that contains exactly these two users.
+   * Returns null if none exists. Used for find-or-create dedup.
+   */
+  abstract findDirectConversation(
+    userId1: string,
+    userId2: string,
+  ): Promise<StoredConversation | null>;
+
   abstract addMember(conversationId: string, userId: string): Promise<void>;
 
   abstract removeMember(conversationId: string, userId: string): Promise<void>;
+
+  /**
+   * Delete all messages in a conversation whose createdAt >= since.
+   * Used to flush messages when a temporary-chat session ends.
+   */
+  abstract deleteMessagesSince(
+    conversationId: string,
+    since: Date,
+  ): Promise<void>;
 }

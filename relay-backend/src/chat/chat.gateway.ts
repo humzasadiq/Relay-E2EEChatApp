@@ -42,6 +42,26 @@ export class ChatGateway
     this.chat.messageCreated$.subscribe((event) => {
       this.server.to(event.conversationId).emit('message:new', event.message);
     });
+    this.chat.conversationCreated$.subscribe((event) => {
+      // Notify each member via their personal room so they can refresh their list
+      for (const memberId of event.conv.memberIds) {
+        this.server
+          .to(`user:${memberId}`)
+          .emit('conv:new', { conversationId: event.conv.id });
+      }
+    });
+    this.chat.tempStarted$.subscribe((event) => {
+      this.server.to(event.conversationId).emit('temp:started', {
+        conversationId: event.conversationId,
+        since: event.since.toISOString(),
+      });
+    });
+    this.chat.tempEnded$.subscribe((event) => {
+      this.server.to(event.conversationId).emit('temp:ended', {
+        conversationId: event.conversationId,
+        since: event.since.toISOString(),
+      });
+    });
   }
 
   async handleConnection(client: AuthedSocket) {
@@ -56,6 +76,8 @@ export class ChatGateway
       );
       client.data.userId = payload.sub;
       client.data.email = payload.email;
+      // Auto-join personal room so the client receives conversation notifications
+      await client.join(`user:${payload.sub}`);
       this.logger.debug(`ws connect: ${payload.email} (${client.id})`);
     } catch (err) {
       this.logger.warn(`ws auth failed: ${(err as Error).message}`);
@@ -102,6 +124,19 @@ export class ChatGateway
       nonce: payload.nonce,
     });
     return { ok: true, message };
+  }
+
+  @SubscribeMessage('temp:toggle')
+  async toggleTemp(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: { conversationId: string },
+  ) {
+    const userId = this.requireUser(client);
+    const result = await this.chat.toggleTempSession(
+      payload.conversationId,
+      userId,
+    );
+    return { ok: true, started: result.started, since: result.since.toISOString() };
   }
 
   private requireUser(client: AuthedSocket): string {

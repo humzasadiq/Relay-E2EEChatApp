@@ -73,6 +73,23 @@ export class DatabaseChatStrategy extends ChatStorageStrategy {
     return rows.reverse().map((r) => ({ ...r }));
   }
 
+  async findDirectConversation(
+    userId1: string,
+    userId2: string,
+  ): Promise<StoredConversation | null> {
+    const conv = await this.prisma.conversation.findFirst({
+      where: {
+        type: 'DIRECT',
+        AND: [
+          { memberships: { some: { userId: userId1 } } },
+          { memberships: { some: { userId: userId2 } } },
+        ],
+      },
+      include: { memberships: true },
+    });
+    return conv ? toStored(conv) : null;
+  }
+
   async addMember(conversationId: string, userId: string): Promise<void> {
     await this.prisma.membership.upsert({
       where: { userId_conversationId: { userId, conversationId } },
@@ -87,6 +104,12 @@ export class DatabaseChatStrategy extends ChatStorageStrategy {
       .catch(() => {
         throw new NotFoundException('Membership not found');
       });
+  }
+
+  async deleteMessagesSince(conversationId: string, since: Date): Promise<void> {
+    await this.prisma.message.deleteMany({
+      where: { conversationId, createdAt: { gte: since } },
+    });
   }
 }
 

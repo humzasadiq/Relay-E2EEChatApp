@@ -65,6 +65,20 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
     return bucket.slice(-limit);
   }
 
+  async findDirectConversation(
+    userId1: string,
+    userId2: string,
+  ): Promise<StoredConversation | null> {
+    return (
+      [...this.conversations.values()].find(
+        (c) =>
+          c.type === 'DIRECT' &&
+          c.memberIds.includes(userId1) &&
+          c.memberIds.includes(userId2),
+      ) ?? null
+    );
+  }
+
   async addMember(conversationId: string, userId: string): Promise<void> {
     const conv = this.conversations.get(conversationId);
     if (!conv) throw new NotFoundException('Conversation not found');
@@ -75,5 +89,14 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
     const conv = this.conversations.get(conversationId);
     if (!conv) throw new NotFoundException('Conversation not found');
     conv.memberIds = conv.memberIds.filter((id) => id !== userId);
+  }
+
+  async deleteMessagesSince(conversationId: string, since: Date): Promise<void> {
+    const bucket = this.messages.get(conversationId);
+    if (!bucket) return;
+    this.messages.set(
+      conversationId,
+      bucket.filter((m) => m.createdAt < since),
+    );
   }
 }

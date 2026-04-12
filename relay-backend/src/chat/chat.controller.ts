@@ -20,6 +20,10 @@ import type { StoredConversation } from './storage/chat-storage.strategy';
 export interface EnrichedConversation extends StoredConversation {
   /** displayName keyed by userId for every member in this conversation */
   memberNames: Record<string, string>;
+  /** email keyed by userId — used as stable avatar seed on the client */
+  memberEmails: Record<string, string>;
+  /** ISO timestamp if a temporary-chat session is active, null otherwise */
+  tempSessionSince: string | null;
 }
 
 @UseGuards(JwtAuthGuard)
@@ -73,14 +77,20 @@ export class ChatController {
     });
   }
 
-  /** Resolve all member userIds → displayNames in one shot. */
+  /** Resolve all member userIds → displayNames and emails in one shot. */
   private async enrich(conv: StoredConversation): Promise<EnrichedConversation> {
     const entries = await Promise.all(
       conv.memberIds.map(async (uid) => {
         const u = await this.users.findById(uid);
-        return [uid, u?.displayName ?? uid] as [string, string];
+        return { uid, name: u?.displayName ?? uid, email: u?.email ?? uid };
       }),
     );
-    return { ...conv, memberNames: Object.fromEntries(entries) };
+    const tempSession = this.chat.getTempSession(conv.id);
+    return {
+      ...conv,
+      memberNames: Object.fromEntries(entries.map((e) => [e.uid, e.name])),
+      memberEmails: Object.fromEntries(entries.map((e) => [e.uid, e.email])),
+      tempSessionSince: tempSession ? tempSession.toISOString() : null,
+    };
   }
 }

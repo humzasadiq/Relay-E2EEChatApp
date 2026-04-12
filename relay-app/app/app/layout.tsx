@@ -17,7 +17,7 @@ export default function AppLayout({
 }) {
   const router = useRouter();
   const { status, user, accessToken, hydrate } = useAuth();
-  const { receive, loadConversations, reset } = useChat();
+  const { receive, loadConversations, reset, setTempSession, clearTempSession } = useChat();
   const [activeSection, setActiveSection] = useState<"chats" | "calls">("chats");
   const [newChatOpen, setNewChatOpen] = useState(false);
 
@@ -35,12 +35,30 @@ export default function AppLayout({
     if (!accessToken) return;
     const socket = getSocket(accessToken);
     const onMessage = (m: Parameters<typeof receive>[0]) => receive(m);
+    const onTempStarted = (d: { conversationId: string; since: string }) =>
+      setTempSession(d.conversationId, d.since);
+    const onTempEnded = (d: { conversationId: string; since: string }) =>
+      clearTempSession(d.conversationId, d.since);
+    // On reconnect, re-join all rooms and refresh conversation state
+    // (this picks up any temp session that was started while disconnected)
+    const onConnect = () => loadConversations(accessToken);
+    // When another user starts a chat with us, refresh the conversation list
+    const onConvNew = () => loadConversations(accessToken);
+
     socket.on("message:new", onMessage);
+    socket.on("temp:started", onTempStarted);
+    socket.on("temp:ended", onTempEnded);
+    socket.on("connect", onConnect);
+    socket.on("conv:new", onConvNew);
     loadConversations(accessToken);
     return () => {
       socket.off("message:new", onMessage);
+      socket.off("temp:started", onTempStarted);
+      socket.off("temp:ended", onTempEnded);
+      socket.off("connect", onConnect);
+      socket.off("conv:new", onConvNew);
     };
-  }, [accessToken, receive, loadConversations]);
+  }, [accessToken, receive, loadConversations, setTempSession, clearTempSession]);
 
   useEffect(() => {
     return () => {
@@ -61,7 +79,7 @@ export default function AppLayout({
 
   return (
     <>
-      <div className="flex flex-1 h-dvh overflow-hidden">
+      <div className="fixed inset-0 flex overflow-hidden">
         {/* Column 1: slim icon nav rail */}
         <NavRail active={activeSection} onSelect={setActiveSection} />
 

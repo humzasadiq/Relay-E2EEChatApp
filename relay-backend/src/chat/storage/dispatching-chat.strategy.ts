@@ -75,6 +75,19 @@ export class DispatchingChatStrategy extends ChatStorageStrategy {
     return strategy.loadHistory(conversationId, limit);
   }
 
+  async findDirectConversation(
+    userId1: string,
+    userId2: string,
+  ): Promise<StoredConversation | null> {
+    const [fromDb, fromMem] = await Promise.all([
+      this.dbEnabled
+        ? this.db.findDirectConversation(userId1, userId2)
+        : Promise.resolve(null),
+      this.mem.findDirectConversation(userId1, userId2),
+    ]);
+    return fromDb ?? fromMem ?? null;
+  }
+
   async addMember(conversationId: string, userId: string): Promise<void> {
     const strategy = await this.requireRoute(conversationId);
     await strategy.addMember(conversationId, userId);
@@ -83,6 +96,11 @@ export class DispatchingChatStrategy extends ChatStorageStrategy {
   async removeMember(conversationId: string, userId: string): Promise<void> {
     const strategy = await this.requireRoute(conversationId);
     await strategy.removeMember(conversationId, userId);
+  }
+
+  async deleteMessagesSince(conversationId: string, since: Date): Promise<void> {
+    const strategy = await this.requireRoute(conversationId);
+    await strategy.deleteMessagesSince(conversationId, since);
   }
 
   private async resolve(id: string): Promise<ChatStorageStrategy | null> {

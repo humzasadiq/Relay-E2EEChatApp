@@ -21,6 +21,10 @@ export interface Conversation {
   memberIds: string[];
   /** displayName keyed by userId — populated by the backend */
   memberNames: Record<string, string>;
+  /** email keyed by userId — stable avatar seed */
+  memberEmails: Record<string, string>;
+  /** ISO timestamp if a temporary-chat session is active, null otherwise */
+  tempSessionSince: string | null;
   temporary: boolean;
   createdAt: string;
 }
