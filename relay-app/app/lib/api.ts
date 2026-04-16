@@ -7,6 +7,21 @@ export interface PublicUser {
   displayName: string;
   avatarUrl: string | null;
   createdAt: string;
+  /** Only present in search results. Needed to wrap conv keys for this user. */
+  exchangePubKey?: string | null;
+}
+
+export interface StoredKeyBundle {
+  userId: string;
+  identityPubKey: string;
+  exchangePubKey: string;
+  wrappedPrivateKeys: string;
+}
+
+export interface PublicKeyBundleResponse {
+  userId: string;
+  identityPubKey: string;
+  exchangePubKey: string;
 }
 
 export interface AuthResponse {
@@ -36,6 +51,8 @@ export interface ChatMessage {
   ciphertext: string;
   nonce: string;
   createdAt: string;
+  /** Populated client-side after decrypt. Never sent from the server. */
+  text?: string;
 }
 
 export class ApiError extends Error {
@@ -69,8 +86,12 @@ async function request<T>(
       (body as { message?: string }).message ?? res.statusText,
     );
   }
+  // 204 always, and some Nest endpoints return 200 with an empty body
+  // when the handler resolves to null/undefined — treat both as empty.
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export const api = {
@@ -113,6 +134,7 @@ export const api = {
       memberIds: string[];
       name?: string;
       temporary?: boolean;
+      wrappedKeys?: Record<string, string>;
     },
   ) =>
     request<Conversation>("/chat/conversations", {
@@ -126,4 +148,41 @@ export const api = {
       `/chat/conversations/${conversationId}/messages`,
       { accessToken },
     ),
+
+  getMyWrappedKey: (accessToken: string, conversationId: string) =>
+    request<{ wrappedKey: string | null }>(
+      `/chat/conversations/${conversationId}/key`,
+      { accessToken },
+    ),
+
+  upsertConversationKeys: (
+    accessToken: string,
+    conversationId: string,
+    wrappedKeys: Record<string, string>,
+  ) =>
+    request<{ ok: true }>(`/chat/conversations/${conversationId}/keys`, {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ wrappedKeys }),
+    }),
+
+  saveMyKeyBundle: (
+    accessToken: string,
+    body: {
+      identityPubKey: string;
+      exchangePubKey: string;
+      wrappedPrivateKeys: string;
+    },
+  ) =>
+    request<StoredKeyBundle>("/users/me/keys", {
+      method: "PUT",
+      accessToken,
+      body: JSON.stringify(body),
+    }),
+
+  getMyKeyBundle: (accessToken: string) =>
+    request<StoredKeyBundle | null>("/users/me/keys", { accessToken }),
+
+  getUserKeys: (accessToken: string, userId: string) =>
+    request<PublicKeyBundleResponse>(`/users/${userId}/keys`, { accessToken }),
 };

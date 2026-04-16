@@ -62,7 +62,7 @@ export function SettingsPopover() {
       {/* Trigger: the entire user footer row */}
       <MorphingPopoverTrigger
         type="button"
-        className="w-full flex items-center gap-3 px-4 py-3 border-t hover:bg-surface-hover transition-colors"
+        className="w-full flex items-center gap-10 px-4 py-3 border-t hover:bg-surface-hover transition-colors select-none"
         style={{ borderColor: 'var(--border)' }}
       >
         <Avatar name={user?.email ?? user?.displayName ?? '?'} size={36} />

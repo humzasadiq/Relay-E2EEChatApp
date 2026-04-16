@@ -13,6 +13,14 @@ export interface UserRecord {
 
 export type PublicUser = Omit<UserRecord, 'passwordHash'>;
 
+export interface KeyBundleRecord {
+  userId: string;
+  identityPubKey: string;
+  exchangePubKey: string;
+  /** Opaque blob — argon2id+secretbox of the user's private keys. */
+  wrappedPrivateKeys: string;
+}
+
 /**
  * UsersService transparently switches between Prisma and an in-memory
  * Map when DATABASE_URL is unset — same spirit as the chat storage
@@ -23,6 +31,7 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly byId = new Map<string, UserRecord>();
   private readonly byEmail = new Map<string, UserRecord>();
+  private readonly bundlesByUserId = new Map<string, KeyBundleRecord>();
   private readonly usingDb: boolean;
 
   constructor(private readonly prisma: PrismaService) {
@@ -98,11 +107,50 @@ export class UsersService {
     return updated;
   }
 
+  async saveKeyBundle(input: KeyBundleRecord): Promise<KeyBundleRecord> {
+    if (this.usingDb) {
+      const row = await this.prisma.keyBundle.upsert({
+        where: { userId: input.userId },
+        update: {
+          identityPubKey: input.identityPubKey,
+          exchangePubKey: input.exchangePubKey,
+          wrappedPrivateKeys: input.wrappedPrivateKeys,
+        },
+        create: { ...input },
+      });
+      return toBundleRecord(row);
+    }
+    this.bundlesByUserId.set(input.userId, { ...input });
+    return { ...input };
+  }
+
+  async findKeyBundle(userId: string): Promise<KeyBundleRecord | null> {
+    if (this.usingDb) {
+      const row = await this.prisma.keyBundle.findUnique({ where: { userId } });
+      return row ? toBundleRecord(row) : null;
+    }
+    return this.bundlesByUserId.get(userId) ?? null;
+  }
+
   static toPublic(user: UserRecord): PublicUser {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, ...rest } = user;
     return rest;
   }
+}
+
+function toBundleRecord(b: {
+  userId: string;
+  identityPubKey: string;
+  exchangePubKey: string;
+  wrappedPrivateKeys: string;
+}): KeyBundleRecord {
+  return {
+    userId: b.userId,
+    identityPubKey: b.identityPubKey,
+    exchangePubKey: b.exchangePubKey,
+    wrappedPrivateKeys: b.wrappedPrivateKeys,
+  };
 }
 
 function toRecord(u: {

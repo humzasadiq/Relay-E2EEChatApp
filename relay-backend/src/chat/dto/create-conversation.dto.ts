@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -29,4 +30,12 @@ export class CreateConversationDto {
   @IsBoolean()
   @Type(() => Boolean)
   temporary?: boolean;
+
+  /**
+   * One wrapped copy of the conversation key per member (keyed by userId).
+   * Opaque ciphertext — the server just stores it.
+   */
+  @IsOptional()
+  @IsObject()
+  wrappedKeys?: Record<string, string>;
 }

@@ -14,7 +14,7 @@ interface Props {
 
 export function NewChatDialog({ open, onClose }: Props) {
   const router = useRouter();
-  const { accessToken } = useAuth();
+  const { user, accessToken } = useAuth();
   const { startDirect } = useChat();
 
   const [email, setEmail] = useState("");
@@ -54,7 +54,8 @@ export function NewChatDialog({ open, onClose }: Props) {
   const startChat = async () => {
     if (!accessToken || !candidate) return;
     try {
-      const conv = await startDirect(accessToken, candidate, { temporary: false });
+      if (!user) return;
+      const conv = await startDirect(accessToken, user, candidate, { temporary: false });
       close();
       router.push(`/app/chat/${conv.id}`);
     } catch (e) {

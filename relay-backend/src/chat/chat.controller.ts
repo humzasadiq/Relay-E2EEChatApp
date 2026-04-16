@@ -44,8 +44,33 @@ export class ChatController {
       name: dto.name ?? null,
       memberIds: dto.memberIds,
       temporary: dto.temporary ?? false,
+      wrappedKeys: dto.wrappedKeys,
     });
     return this.enrich(conv);
+  }
+
+  @Get('conversations/:id/key')
+  async myKey(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    const wrappedKey = await this.chat.getWrappedKey(user.sub, id);
+    return { wrappedKey };
+  }
+
+  /**
+   * Upsert wrapped conversation keys — used to lazily provision keys
+   * for conversations created before M3, or to rotate them after a
+   * membership change.
+   */
+  @Post('conversations/:id/keys')
+  async upsertKeys(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: { wrappedKeys: Record<string, string> },
+  ) {
+    await this.chat.saveWrappedKeys(user.sub, id, body.wrappedKeys);
+    return { ok: true };
   }
 
   @Get('conversations')

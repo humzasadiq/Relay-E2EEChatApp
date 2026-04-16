@@ -32,7 +32,8 @@ export default function AppLayout({
   useEffect(() => {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
-    const onMessage = (m: Parameters<typeof receive>[0]) => receive(m);
+    const onMessage = (m: Parameters<typeof receive>[1]) =>
+      void receive(accessToken, m);
     const onTempStarted = (d: { conversationId: string; since: string }) =>
       setTempSession(d.conversationId, d.since);
     const onTempEnded = (d: { conversationId: string; since: string }) =>

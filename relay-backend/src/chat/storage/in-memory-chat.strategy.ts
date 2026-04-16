@@ -15,6 +15,8 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
   private readonly logger = new Logger(InMemoryChatStrategy.name);
   private readonly conversations = new Map<string, StoredConversation>();
   private readonly messages = new Map<string, StoredMessage[]>();
+  /** conversationId → userId → wrappedKey */
+  private readonly wrappedKeys = new Map<string, Map<string, string>>();
 
   constructor() {
     super();
@@ -98,5 +100,23 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
       conversationId,
       bucket.filter((m) => m.createdAt < since),
     );
+  }
+
+  async saveConversationKeys(
+    conversationId: string,
+    wrappedKeys: Record<string, string>,
+  ): Promise<void> {
+    const bucket = this.wrappedKeys.get(conversationId) ?? new Map<string, string>();
+    for (const [userId, wrappedKey] of Object.entries(wrappedKeys)) {
+      bucket.set(userId, wrappedKey);
+    }
+    this.wrappedKeys.set(conversationId, bucket);
+  }
+
+  async getWrappedKey(
+    conversationId: string,
+    userId: string,
+  ): Promise<string | null> {
+    return this.wrappedKeys.get(conversationId)?.get(userId) ?? null;
   }
 }

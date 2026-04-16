@@ -48,7 +48,10 @@ export class ChatService {
 
   async createConversation(
     creatorId: string,
-    input: Omit<CreateConversationInput, 'memberIds'> & { memberIds: string[] },
+    input: Omit<CreateConversationInput, 'memberIds'> & {
+      memberIds: string[];
+      wrappedKeys?: Record<string, string>;
+    },
   ): Promise<StoredConversation> {
     const memberIds = Array.from(new Set([creatorId, ...input.memberIds]));
     if (input.type === 'DIRECT' && memberIds.length !== 2) {
@@ -63,8 +66,28 @@ export class ChatService {
       if (existing) return existing;
     }
     const conv = await this.storage.createConversation({ ...input, memberIds });
+    if (input.wrappedKeys) {
+      await this.storage.saveConversationKeys(conv.id, input.wrappedKeys);
+    }
     this.conversationCreated$.next({ conv });
     return conv;
+  }
+
+  async getWrappedKey(
+    userId: string,
+    conversationId: string,
+  ): Promise<string | null> {
+    await this.requireMember(conversationId, userId);
+    return this.storage.getWrappedKey(conversationId, userId);
+  }
+
+  async saveWrappedKeys(
+    userId: string,
+    conversationId: string,
+    wrappedKeys: Record<string, string>,
+  ): Promise<void> {
+    await this.requireMember(conversationId, userId);
+    await this.storage.saveConversationKeys(conversationId, wrappedKeys);
   }
 
   listConversations(userId: string): Promise<StoredConversation[]> {

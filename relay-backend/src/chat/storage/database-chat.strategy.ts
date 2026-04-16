@@ -111,6 +111,33 @@ export class DatabaseChatStrategy extends ChatStorageStrategy {
       where: { conversationId, createdAt: { gte: since } },
     });
   }
+
+  async saveConversationKeys(
+    conversationId: string,
+    wrappedKeys: Record<string, string>,
+  ): Promise<void> {
+    const entries = Object.entries(wrappedKeys);
+    if (entries.length === 0) return;
+    await this.prisma.$transaction(
+      entries.map(([userId, wrappedKey]) =>
+        this.prisma.conversationKey.upsert({
+          where: { userId_conversationId: { userId, conversationId } },
+          update: { wrappedKey },
+          create: { userId, conversationId, wrappedKey },
+        }),
+      ),
+    );
+  }
+
+  async getWrappedKey(
+    conversationId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const row = await this.prisma.conversationKey.findUnique({
+      where: { userId_conversationId: { userId, conversationId } },
+    });
+    return row?.wrappedKey ?? null;
+  }
 }
 
 function toStored(conv: {

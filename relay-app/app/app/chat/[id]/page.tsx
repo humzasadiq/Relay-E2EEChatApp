@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import { Avatar } from "../../../_components/avatar";
+import { TextScramble } from "../../../_components/ui/text-scramble";
 import { useAuth } from "../../../lib/auth-store";
 import { useChat } from "../../../lib/chat-store";
 import { Conversation } from "../../../lib/api";
@@ -81,10 +82,21 @@ function senderColor(userId: string) {
 /* ── double-check icon ───────────────────────────────────────────── */
 function DoubleCheck({ color = "currentColor" }: { color?: string }) {
   return (
-    <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
-      <path d="M1 5l3 3 5-6" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 8l5-6" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 2l4 4" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden>
+      <path
+        d="M1 5.2l2.8 2.8L8.6 1.6"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.2 5.2L9 8l5.8-6.4"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -252,6 +264,9 @@ export default function ChatPage() {
   const title = conv ? convLabel(conv, myId) : "…";
   const tempSince = conv ? (tempSessionByConv[conv.id] ?? null) : null;
   const isTempActive = tempSince !== null;
+  // Baseline for "new message" detection — anything with createdAt
+  // after this moment scrambles on first render.
+  const pageMountRef = useRef(Date.now());
 
   useEffect(() => {
     if (accessToken && id) openConversation(accessToken, id);
@@ -433,7 +448,17 @@ export default function ChatPage() {
                       color: mine ? "var(--bubble-out-text)" : "var(--text)",
                     }}
                   >
-                    <div className="whitespace-pre-wrap">{m.ciphertext}</div>
+                    <TextScramble
+                      as="div"
+                      className="whitespace-pre-wrap"
+                      duration={0.6}
+                      speed={0.025}
+                      trigger={
+                        new Date(m.createdAt).getTime() > pageMountRef.current
+                      }
+                    >
+                      {m.text ?? "…"}
+                    </TextScramble>
                     {isLastInGroup && (
                       <div className={`mt-1 flex items-center gap-1 ${mine ? "justify-end" : ""}`}>
                         <span className="text-[10px] opacity-70">

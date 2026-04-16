@@ -8,6 +8,7 @@ import { Conversation } from "../lib/api";
 import { Avatar } from "./avatar";
 import { NewChatPopover } from "./new-chat-popover";
 import { SettingsPopover } from "./settings-popover";
+import { TextScramble } from "./ui/text-scramble";
 
 function convLabel(conv: Conversation, myId: string): string {
   if (conv.name) return conv.name;
@@ -141,9 +142,16 @@ export function Sidebar() {
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <span className="text-xs text-muted truncate">
-                        {last?.ciphertext ?? "No messages yet"}
-                      </span>
+                      <TextScramble
+                        key={last?.id ?? "empty"}
+                        as="span"
+                        className="text-xs text-muted truncate block max-w-full"
+                        duration={0.6}
+                        speed={0.025}
+                        trigger={!!last}
+                      >
+                        {last?.text ?? (last ? "…" : "No messages yet")}
+                      </TextScramble>
                       <div className="flex items-center gap-1 shrink-0">
                         {c.temporary && (
                           <span className="text-[9px] uppercase tracking-widest rounded-full px-1.5 py-0.5" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>

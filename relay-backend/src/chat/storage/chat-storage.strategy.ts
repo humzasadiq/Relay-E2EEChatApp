@@ -76,6 +76,21 @@ export abstract class ChatStorageStrategy {
   abstract removeMember(conversationId: string, userId: string): Promise<void>;
 
   /**
+   * Persist each member's wrapped copy of the conversation symmetric key.
+   * `wrappedKeys` is keyed by userId. Opaque to the server.
+   */
+  abstract saveConversationKeys(
+    conversationId: string,
+    wrappedKeys: Record<string, string>,
+  ): Promise<void>;
+
+  /** Return this user's wrapped conversation key, or null if missing. */
+  abstract getWrappedKey(
+    conversationId: string,
+    userId: string,
+  ): Promise<string | null>;
+
+  /**
    * Delete all messages in a conversation whose createdAt >= since.
    * Used to flush messages when a temporary-chat session ends.
    */
