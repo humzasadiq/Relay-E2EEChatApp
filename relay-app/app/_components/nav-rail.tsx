@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter, usePathname } from "next/navigation";
 import { useChat } from "../lib/chat-store";
 import { useTheme } from "../lib/theme-store";
 
-type Section = "chats" | "calls";
+type Section = "chats" | "calls" | "learn";
 
 interface Props {
   active: Section;
@@ -18,16 +19,21 @@ function totalUnread(unreadByConv: Record<string, number>) {
 export function NavRail({ active, onSelect }: Props) {
   const { unreadByConv } = useChat();
   const { resolved } = useTheme();
+  const router = useRouter();
+  const pathname = usePathname();
   const unread = totalUnread(unreadByConv);
 
   // dark mode → light.png (black-on-white logo as contrast on dark rail)
   // light mode → dark.png (white-on-black logo as contrast on light rail)
   const logoSrc = resolved === "dark" ? "/logos/light.png" : "/logos/dark.png";
 
+  const isLearn = pathname.startsWith("/app/learn");
+
   const items: {
     id: Section;
     label: string;
     badge?: number;
+    route?: string;
     icon: React.ReactNode;
   }[] = [
     {
@@ -35,16 +41,7 @@ export function NavRail({ active, onSelect }: Props) {
       label: "Chats",
       badge: unread > 0 ? unread : undefined,
       icon: (
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       ),
@@ -53,17 +50,19 @@ export function NavRail({ active, onSelect }: Props) {
       id: "calls",
       label: "Calls",
       icon: (
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.75h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+        </svg>
+      ),
+    },
+    {
+      id: "learn",
+      label: "E2EE",
+      route: "/app/learn",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
       ),
     },
@@ -77,8 +76,12 @@ export function NavRail({ active, onSelect }: Props) {
         borderColor: "var(--nav-border)",
       }}
     >
-      {/* Logo mark — inverted per theme for contrast */}
-      <div className="w-10 h-10 rounded-xl overflow-hidden mb-3 shrink-0">
+      {/* Logo — click navigates to the E2EE learn page */}
+      <button
+        onClick={() => router.push("/app/learn")}
+        className="w-10 h-10 rounded-xl overflow-hidden mb-3 shrink-0 transition-opacity hover:opacity-80"
+        title="How Relay encrypts"
+      >
         <Image
           src={logoSrc}
           alt="Relay"
@@ -87,14 +90,18 @@ export function NavRail({ active, onSelect }: Props) {
           className="w-full h-full object-cover"
           priority
         />
-      </div>
+      </button>
 
       {items.map((item) => {
-        const isActive = item.id === active;
+        const isActive = item.route ? isLearn : item.id === active && !isLearn;
         return (
           <button
             key={item.id}
-            onClick={() => onSelect(item.id)}
+            onClick={() => {
+              if (item.route) { router.push(item.route); }
+              else if (item.id === "chats") { router.push("/app"); onSelect(item.id); }
+              else { onSelect(item.id); }
+            }}
             title={item.label}
             className="relative w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-colors"
             style={{

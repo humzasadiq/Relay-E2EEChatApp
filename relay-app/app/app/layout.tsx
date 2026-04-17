@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NavRail } from "../_components/nav-rail";
 import { Sidebar } from "../_components/sidebar";
@@ -17,7 +17,9 @@ export default function AppLayout({
   const router = useRouter();
   const { status, user, accessToken, hydrate } = useAuth();
   const { receive, loadConversations, reset, setTempSession, clearTempSession } = useChat();
-  const [activeSection, setActiveSection] = useState<"chats" | "calls">("chats");
+  const pathname = usePathname();
+  const isLearn = pathname.startsWith("/app/learn");
+  const [activeSection, setActiveSection] = useState<"chats" | "calls" | "learn">("chats");
 
   useThemeSync();
 
@@ -82,10 +84,10 @@ export default function AppLayout({
         {/* Column 1: slim icon nav rail */}
         <NavRail active={activeSection} onSelect={setActiveSection} />
 
-        {/* Column 2: conversation sidebar */}
-        <Sidebar />
+        {/* Column 2: conversation sidebar — hidden on the learn page */}
+        {!isLearn && <Sidebar />}
 
-        {/* Column 3: active chat / empty state */}
+        {/* Column 3: active chat / learn page / empty state */}
         <section className="flex-1 flex flex-col min-w-0 bg-background">
           {children}
         </section>
