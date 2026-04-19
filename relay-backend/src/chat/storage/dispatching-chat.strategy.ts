@@ -119,6 +119,12 @@ export class DispatchingChatStrategy extends ChatStorageStrategy {
     return strategy.getWrappedKey(conversationId, userId);
   }
 
+  async deleteConversation(id: string): Promise<void> {
+    const strategy = await this.requireRoute(id);
+    await strategy.deleteConversation(id);
+    this.routes.delete(id);
+  }
+
   private async resolve(id: string): Promise<ChatStorageStrategy | null> {
     const cached = this.routes.get(id);
     if (cached) return cached;

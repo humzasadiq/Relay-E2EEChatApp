@@ -29,6 +29,8 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
       type: input.type,
       name: input.name ?? null,
       memberIds: [...input.memberIds],
+      // First memberIds entry is always the creator (service prepends creatorId)
+      ownerId: input.type === 'GROUP' ? (input.memberIds[0] ?? null) : null,
       temporary: input.temporary,
       createdAt: new Date(),
     };
@@ -44,7 +46,11 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
   async listConversationsForUser(userId: string): Promise<StoredConversation[]> {
     return [...this.conversations.values()]
       .filter((c) => c.memberIds.includes(userId))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((c) => {
+        const msgs = this.messages.get(c.id) ?? [];
+        return { ...c, lastMessage: msgs[msgs.length - 1] ?? null };
+      });
   }
 
   async saveMessage(input: SaveMessageInput): Promise<StoredMessage> {
@@ -100,6 +106,12 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
       conversationId,
       bucket.filter((m) => m.createdAt < since),
     );
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    this.conversations.delete(id);
+    this.messages.delete(id);
+    this.wrappedKeys.delete(id);
   }
 
   async saveConversationKeys(

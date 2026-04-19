@@ -48,6 +48,10 @@ class KeyStore {
     return this.convKeys.get(conversationId) ?? null;
   }
 
+  clearConversationKey(conversationId: string): void {
+    this.convKeys.delete(conversationId);
+  }
+
   clear(): void {
     this.privateBundle = null;
     this.convKeys.clear();

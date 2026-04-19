@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseIntPipe,
   Post,
@@ -77,6 +79,35 @@ export class ChatController {
   async list(@CurrentUser() user: AuthenticatedUser) {
     const convs = await this.chat.listConversations(user.sub);
     return Promise.all(convs.map((c) => this.enrich(c)));
+  }
+
+  @Post('conversations/:id/members')
+  async addMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: { userId: string; wrappedKey: string },
+  ) {
+    const conv = await this.chat.addGroupMember(id, user.sub, body.userId, body.wrappedKey);
+    return this.enrich(conv);
+  }
+
+  @Delete('conversations/:id/members/:userId')
+  @HttpCode(204)
+  async removeMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    await this.chat.removeGroupMember(id, user.sub, userId);
+  }
+
+  @Delete('conversations/:id')
+  @HttpCode(204)
+  async deleteConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    await this.chat.deleteConversation(user.sub, id);
   }
 
   @Get('conversations/:id/messages')

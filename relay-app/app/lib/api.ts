@@ -34,6 +34,8 @@ export interface Conversation {
   type: "DIRECT" | "GROUP";
   name: string | null;
   memberIds: string[];
+  /** userId of the group owner; null for DIRECT conversations */
+  ownerId: string | null;
   /** displayName keyed by userId — populated by the backend */
   memberNames: Record<string, string>;
   /** email keyed by userId — stable avatar seed */
@@ -42,6 +44,8 @@ export interface Conversation {
   tempSessionSince: string | null;
   temporary: boolean;
   createdAt: string;
+  /** Most recent message — encrypted, populated by the list endpoint */
+  lastMessage?: ChatMessage | null;
 }
 
 export interface ChatMessage {
@@ -149,6 +153,12 @@ export const api = {
       { accessToken },
     ),
 
+  deleteConversation: (accessToken: string, conversationId: string) =>
+    request<void>(`/chat/conversations/${conversationId}`, {
+      method: "DELETE",
+      accessToken,
+    }),
+
   getMyWrappedKey: (accessToken: string, conversationId: string) =>
     request<{ wrappedKey: string | null }>(
       `/chat/conversations/${conversationId}/key`,
@@ -164,6 +174,28 @@ export const api = {
       method: "POST",
       accessToken,
       body: JSON.stringify({ wrappedKeys }),
+    }),
+
+  addGroupMember: (
+    accessToken: string,
+    conversationId: string,
+    userId: string,
+    wrappedKey: string,
+  ) =>
+    request<Conversation>(`/chat/conversations/${conversationId}/members`, {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ userId, wrappedKey }),
+    }),
+
+  removeGroupMember: (
+    accessToken: string,
+    conversationId: string,
+    userId: string,
+  ) =>
+    request<void>(`/chat/conversations/${conversationId}/members/${userId}`, {
+      method: "DELETE",
+      accessToken,
     }),
 
   saveMyKeyBundle: (

@@ -50,6 +50,13 @@ export class ChatGateway
           .emit('conv:new', { conversationId: event.conv.id });
       }
     });
+    this.chat.conversationDeleted$.subscribe((event) => {
+      for (const memberId of event.memberIds) {
+        this.server
+          .to(`user:${memberId}`)
+          .emit('conv:deleted', { conversationId: event.conversationId });
+      }
+    });
     this.chat.tempStarted$.subscribe((event) => {
       this.server.to(event.conversationId).emit('temp:started', {
         conversationId: event.conversationId,
@@ -60,6 +67,28 @@ export class ChatGateway
       this.server.to(event.conversationId).emit('temp:ended', {
         conversationId: event.conversationId,
         since: event.since.toISOString(),
+      });
+    });
+    this.chat.memberAdded$.subscribe((event) => {
+      // Notify the new member so their sidebar picks up the conversation
+      this.server
+        .to(`user:${event.addedUserId}`)
+        .emit('conv:new', { conversationId: event.conversationId });
+      // Notify everyone already in the room to refresh their member list
+      this.server.to(event.conversationId).emit('group:member-added', {
+        conversationId: event.conversationId,
+        userId: event.addedUserId,
+      });
+    });
+    this.chat.memberRemoved$.subscribe((event) => {
+      // Tell the removed user their membership is gone
+      this.server
+        .to(`user:${event.removedUserId}`)
+        .emit('group:kicked', { conversationId: event.conversationId });
+      // Tell remaining members to refresh (and rotate key cache)
+      this.server.to(event.conversationId).emit('group:member-removed', {
+        conversationId: event.conversationId,
+        userId: event.removedUserId,
       });
     });
   }
@@ -137,6 +166,109 @@ export class ChatGateway
       userId,
     );
     return { ok: true, started: result.started, since: result.since.toISOString() };
+  }
+
+  // ── WebRTC call signaling ──────────────────────────────────────────────────
+  // All handlers are relay-only: validate membership then forward to the
+  // target user's personal room. No call state is persisted on the server.
+
+  @SubscribeMessage('call:offer')
+  async handleCallOffer(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    payload: {
+      conversationId: string;
+      recipientId: string;
+      offer: RTCSessionDescriptionInit;
+      isVideo: boolean;
+    },
+  ) {
+    const userId = this.requireUser(client);
+    const conv = await this.chat.findMembership(payload.conversationId, userId);
+    if (!conv) throw new WsException('Not a member of this conversation');
+    if (!conv.memberIds.includes(payload.recipientId)) {
+      throw new WsException('Recipient is not in this conversation');
+    }
+    this.server.to(`user:${payload.recipientId}`).emit('call:incoming', {
+      callerId: userId,
+      conversationId: payload.conversationId,
+      offer: payload.offer,
+      isVideo: payload.isVideo,
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage('call:answer')
+  async handleCallAnswer(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    payload: {
+      conversationId: string;
+      callerId: string;
+      answer: RTCSessionDescriptionInit;
+    },
+  ) {
+    const userId = this.requireUser(client);
+    const conv = await this.chat.findMembership(payload.conversationId, userId);
+    if (!conv) throw new WsException('Not a member of this conversation');
+    this.server.to(`user:${payload.callerId}`).emit('call:answered', {
+      answererId: userId,
+      conversationId: payload.conversationId,
+      answer: payload.answer,
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage('call:ice-candidate')
+  async handleIceCandidate(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody()
+    payload: {
+      conversationId: string;
+      targetUserId: string;
+      candidate: RTCIceCandidateInit;
+    },
+  ) {
+    const userId = this.requireUser(client);
+    const conv = await this.chat.findMembership(payload.conversationId, userId);
+    if (!conv) throw new WsException('Not a member of this conversation');
+    this.server.to(`user:${payload.targetUserId}`).emit('call:ice-candidate', {
+      fromUserId: userId,
+      candidate: payload.candidate,
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage('call:reject')
+  async handleCallReject(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: { conversationId: string; callerId: string },
+  ) {
+    const userId = this.requireUser(client);
+    this.server.to(`user:${payload.callerId}`).emit('call:rejected', {
+      rejecterId: userId,
+      conversationId: payload.conversationId,
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage('call:hangup')
+  async handleCallHangup(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: { conversationId: string },
+  ) {
+    const userId = this.requireUser(client);
+    const conv = await this.chat.findMembership(payload.conversationId, userId);
+    if (!conv) throw new WsException('Not a member of this conversation');
+    for (const memberId of conv.memberIds) {
+      if (memberId !== userId) {
+        this.server.to(`user:${memberId}`).emit('call:ended', {
+          byUserId: userId,
+          conversationId: payload.conversationId,
+        });
+      }
+    }
+    return { ok: true };
   }
 
   private requireUser(client: AuthedSocket): string {

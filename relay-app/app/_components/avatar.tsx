@@ -23,9 +23,10 @@ interface Props {
   size?: number;
   className?: string;
   square?: boolean;
+  variant?: "beam" | "pixel" | "marble" | "sunset" | "ring" | "bauhaus";
 }
 
-export function Avatar({ name, size = 40, className = "", square = false }: Props) {
+export function Avatar({ name, size = 40, className = "", square = false, variant = "beam" }: Props) {
   return (
     <div
       className={`shrink-0 overflow-hidden ${square ? "rounded-lg" : "rounded-full"} ${className}`}
@@ -34,7 +35,7 @@ export function Avatar({ name, size = 40, className = "", square = false }: Prop
       <BoringAvatar
         size={size}
         name={name || "?"}
-        variant="beam"
+        variant={variant}
         colors={PALETTE}
         square={square}
       />

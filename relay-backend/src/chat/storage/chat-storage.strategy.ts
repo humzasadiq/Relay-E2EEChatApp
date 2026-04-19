@@ -24,8 +24,11 @@ export interface StoredConversation {
   type: 'DIRECT' | 'GROUP';
   name: string | null;
   memberIds: string[];
+  /** userId of the OWNER, null for DIRECT conversations */
+  ownerId: string | null;
   temporary: boolean;
   createdAt: Date;
+  lastMessage?: StoredMessage | null;
 }
 
 export interface CreateConversationInput {
@@ -98,4 +101,7 @@ export abstract class ChatStorageStrategy {
     conversationId: string,
     since: Date,
   ): Promise<void>;
+
+  /** Permanently delete a conversation and all its messages. */
+  abstract deleteConversation(id: string): Promise<void>;
 }

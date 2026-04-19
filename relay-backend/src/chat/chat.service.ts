@@ -27,6 +27,11 @@ export interface ConversationCreatedEvent {
   conv: StoredConversation;
 }
 
+export interface ConversationDeletedEvent {
+  conversationId: string;
+  memberIds: string[];
+}
+
 @Injectable()
 export class ChatService {
   /**
@@ -36,8 +41,11 @@ export class ChatService {
    */
   readonly messageCreated$ = new Subject<MessageCreatedEvent>();
   readonly conversationCreated$ = new Subject<ConversationCreatedEvent>();
+  readonly conversationDeleted$ = new Subject<ConversationDeletedEvent>();
   readonly tempStarted$ = new Subject<TempSessionEvent>();
   readonly tempEnded$ = new Subject<TempSessionEvent>();
+  readonly memberAdded$ = new Subject<{ conversationId: string; addedUserId: string; memberIds: string[] }>();
+  readonly memberRemoved$ = new Subject<{ conversationId: string; removedUserId: string; remainingMemberIds: string[] }>();
 
   /** In-memory map of conversationId → session start time */
   private readonly tempSessions = new Map<string, Date>();
@@ -94,6 +102,14 @@ export class ChatService {
     return this.storage.listConversationsForUser(userId);
   }
 
+  async deleteConversation(userId: string, conversationId: string): Promise<void> {
+    const conv = await this.requireMember(conversationId, userId);
+    const memberIds = [...conv.memberIds];
+    this.tempSessions.delete(conversationId);
+    await this.storage.deleteConversation(conversationId);
+    this.conversationDeleted$.next({ conversationId, memberIds });
+  }
+
   async getHistory(
     userId: string,
     conversationId: string,
@@ -139,6 +155,49 @@ export class ChatService {
       this.tempStarted$.next({ conversationId, since });
       return { started: true, since };
     }
+  }
+
+  async addGroupMember(
+    conversationId: string,
+    requesterId: string,
+    targetUserId: string,
+    wrappedKey: string,
+  ): Promise<StoredConversation> {
+    const conv = await this.requireMember(conversationId, requesterId);
+    if (conv.type !== 'GROUP')
+      throw new ForbiddenException('Only group conversations support adding members');
+    if (conv.ownerId !== requesterId)
+      throw new ForbiddenException('Only the group owner can add members');
+    if (conv.memberIds.includes(targetUserId))
+      throw new ForbiddenException('User is already a member');
+    await this.storage.addMember(conversationId, targetUserId);
+    await this.storage.saveConversationKeys(conversationId, { [targetUserId]: wrappedKey });
+    const updated = (await this.storage.findConversation(conversationId))!;
+    this.memberAdded$.next({
+      conversationId,
+      addedUserId: targetUserId,
+      memberIds: updated.memberIds,
+    });
+    return updated;
+  }
+
+  async removeGroupMember(
+    conversationId: string,
+    requesterId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    const conv = await this.requireMember(conversationId, requesterId);
+    if (conv.type !== 'GROUP')
+      throw new ForbiddenException('Only group conversations support removing members');
+    if (conv.ownerId !== requesterId)
+      throw new ForbiddenException('Only the group owner can remove members');
+    if (targetUserId === requesterId)
+      throw new ForbiddenException('Cannot remove yourself — delete the conversation instead');
+    if (!conv.memberIds.includes(targetUserId))
+      throw new NotFoundException('User is not a member of this conversation');
+    await this.storage.removeMember(conversationId, targetUserId);
+    const remainingMemberIds = conv.memberIds.filter((id) => id !== targetUserId);
+    this.memberRemoved$.next({ conversationId, removedUserId: targetUserId, remainingMemberIds });
   }
 
   async findMembership(
