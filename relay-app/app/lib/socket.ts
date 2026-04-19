@@ -17,7 +17,7 @@ export function getSocket(accessToken: string): Socket {
   currentToken = accessToken;
   current = io(WS_URL, {
     auth: { token: accessToken },
-    transports: ["websocket"],
+    transports: ["polling", "websocket"],
     autoConnect: true,
   });
   return current;

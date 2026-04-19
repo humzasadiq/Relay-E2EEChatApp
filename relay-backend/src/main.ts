@@ -12,10 +12,11 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
   );
-  app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000',
-    credentials: true,
-  });
+  const rawOrigin = config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000';
+  const corsOrigin = rawOrigin.includes(',')
+    ? rawOrigin.split(',').map((s) => s.trim())
+    : rawOrigin;
+  app.enableCors({ origin: corsOrigin, credentials: true });
 
   const port = Number(config.get<string>('PORT') ?? 4000);
   await app.listen(port);
