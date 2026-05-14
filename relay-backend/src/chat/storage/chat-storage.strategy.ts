@@ -104,4 +104,22 @@ export abstract class ChatStorageStrategy {
 
   /** Permanently delete a conversation and all its messages. */
   abstract deleteConversation(id: string): Promise<void>;
+
+  /**
+   * Delete a single message. Returns true if deleted, false if not found
+   * or the caller is not the sender.
+   */
+  abstract deleteMessage(
+    conversationId: string,
+    messageId: string,
+    senderId: string,
+  ): Promise<boolean>;
+  /**
+   * Strategy pattern — temp session routing hooks.
+   * Default no-ops; DispatchingChatStrategy overrides all three so that
+   * in-flight messages during a temp session never reach the database.
+   */
+  activateTempSession(_conversationId: string): Date { return new Date(); }
+  deactivateTempSession(_conversationId: string): Date | null { return null; }
+  getTempSession(_conversationId: string): Date | null { return null; }
 }

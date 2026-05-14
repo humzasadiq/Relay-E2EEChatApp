@@ -20,10 +20,12 @@ export function CallOverlay() {
     active,
     localStream,
     remoteStream,
+    callError,
     answerCall,
     rejectCall,
     hangup,
     toggleMute,
+    clearCallError,
   } = useCallStore();
 
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -50,6 +52,12 @@ export function CallOverlay() {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
+
+  useEffect(() => {
+    if (!callError) return;
+    const t = setTimeout(() => clearCallError(), 5000);
+    return () => clearTimeout(t);
+  }, [callError, clearCallError]);
 
   useEffect(() => {
     if (!active) {
@@ -280,6 +288,25 @@ export function CallOverlay() {
               <line x1="23" y1="1" x2="1" y2="23" />
             </svg>
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (callError) {
+    return (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto">
+        <div
+          className="flex items-start gap-3 rounded-2xl px-4 py-3 shadow-2xl"
+          style={{ background: "#1e1a2e", border: "1px solid rgba(239,68,68,0.4)" }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <p className="flex-1 text-sm leading-snug" style={{ color: "rgba(255,255,255,0.85)" }}>
+            {callError}
+          </p>
+          <button onClick={clearCallError} className="shrink-0 text-lg leading-none" style={{ color: "rgba(255,255,255,0.4)" }}>×</button>
         </div>
       </div>
     );

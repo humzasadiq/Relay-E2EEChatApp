@@ -40,6 +40,7 @@ export class ChatService {
    * plug in without touching the publish site below.
    */
   readonly messageCreated$ = new Subject<MessageCreatedEvent>();
+  readonly messageDeleted$ = new Subject<{ conversationId: string; messageId: string }>();
   readonly conversationCreated$ = new Subject<ConversationCreatedEvent>();
   readonly conversationDeleted$ = new Subject<ConversationDeletedEvent>();
   readonly tempStarted$ = new Subject<TempSessionEvent>();
@@ -47,8 +48,6 @@ export class ChatService {
   readonly memberAdded$ = new Subject<{ conversationId: string; addedUserId: string; memberIds: string[] }>();
   readonly memberRemoved$ = new Subject<{ conversationId: string; removedUserId: string; remainingMemberIds: string[] }>();
 
-  /** In-memory map of conversationId → session start time */
-  private readonly tempSessions = new Map<string, Date>();
 
   constructor(
     @Inject(CHAT_STORAGE) private readonly storage: ChatStorageStrategy,
@@ -105,7 +104,7 @@ export class ChatService {
   async deleteConversation(userId: string, conversationId: string): Promise<void> {
     const conv = await this.requireMember(conversationId, userId);
     const memberIds = [...conv.memberIds];
-    this.tempSessions.delete(conversationId);
+    this.storage.deactivateTempSession(conversationId);
     await this.storage.deleteConversation(conversationId);
     this.conversationDeleted$.next({ conversationId, memberIds });
   }
@@ -117,6 +116,19 @@ export class ChatService {
   ): Promise<StoredMessage[]> {
     await this.requireMember(conversationId, userId);
     return this.storage.loadHistory(conversationId, limit);
+  }
+
+  async deleteMessage(
+    conversationId: string,
+    messageId: string,
+    senderId: string,
+  ): Promise<boolean> {
+    await this.requireMember(conversationId, senderId);
+    const deleted = await this.storage.deleteMessage(conversationId, messageId, senderId);
+    if (deleted) {
+      this.messageDeleted$.next({ conversationId, messageId });
+    }
+    return deleted;
   }
 
   async sendMessage(input: {
@@ -135,7 +147,7 @@ export class ChatService {
   }
 
   getTempSession(conversationId: string): Date | null {
-    return this.tempSessions.get(conversationId) ?? null;
+    return this.storage.getTempSession(conversationId);
   }
 
   async toggleTempSession(
@@ -143,15 +155,13 @@ export class ChatService {
     userId: string,
   ): Promise<{ started: boolean; since: Date }> {
     await this.requireMember(conversationId, userId);
-    const existing = this.tempSessions.get(conversationId);
+    const existing = this.storage.getTempSession(conversationId);
     if (existing) {
-      this.tempSessions.delete(conversationId);
-      await this.storage.deleteMessagesSince(conversationId, existing);
+      this.storage.deactivateTempSession(conversationId);
       this.tempEnded$.next({ conversationId, since: existing });
       return { started: false, since: existing };
     } else {
-      const since = new Date();
-      this.tempSessions.set(conversationId, since);
+      const since = this.storage.activateTempSession(conversationId);
       this.tempStarted$.next({ conversationId, since });
       return { started: true, since };
     }

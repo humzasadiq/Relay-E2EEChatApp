@@ -31,11 +31,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  keyBundle   KeyBundle?
-  memberships Membership[]
-  messages    Message[]
-  sessions    Session[]
-  convKeys    ConversationKey[]
+  keyBundle    KeyBundle?
+  memberships  Membership[]
+  messages     Message[]
+  sessions     Session[]
+  convKeys     ConversationKey[]
+  mediaAssets  MediaAsset[]
 }
 
 /// Public key material uploaded by the client on signup.
@@ -98,23 +99,26 @@ model Message {
   nonce          String
   createdAt      DateTime @default(now())
 
-  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  media        MediaAsset[]
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
 }
 
-/// Plaintext metadata only. File bytes on Cloudinary are already ciphertext.
+/// Encrypted file bytes stored server-side. The decryption key lives only
+/// inside the encrypted message payload — the server cannot read the content.
 model MediaAsset {
-  id            String   @id @default(cuid())
-  messageId     String
-  cloudinaryUrl String
-  mime          String
-  size          Int
-  createdAt     DateTime @default(now())
+  id             String   @id @default(cuid())
+  uploadedBy     String
+  conversationId String
+  encryptedBytes Bytes
+  mime           String
+  size           Int
+  createdAt      DateTime @default(now())
 
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
 }
 
 model Session {

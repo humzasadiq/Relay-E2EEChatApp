@@ -26,6 +26,7 @@ export class DispatchingChatStrategy extends ChatStorageStrategy {
 
   private readonly logger = new Logger(DispatchingChatStrategy.name);
   private readonly routes = new Map<string, ChatStorageStrategy>();
+  private readonly tempOverrides = new Map<string, Date>();
   private readonly dbEnabled: boolean;
 
   constructor(
@@ -66,13 +67,45 @@ export class DispatchingChatStrategy extends ChatStorageStrategy {
   }
 
   async saveMessage(input: SaveMessageInput): Promise<StoredMessage> {
+    if (this.tempOverrides.has(input.conversationId)) {
+      return this.mem.saveMessage(input);
+    }
     const strategy = await this.requireRoute(input.conversationId);
     return strategy.saveMessage(input);
   }
 
   async loadHistory(conversationId: string, limit?: number): Promise<StoredMessage[]> {
     const strategy = await this.requireRoute(conversationId);
-    return strategy.loadHistory(conversationId, limit);
+    if (!this.tempOverrides.has(conversationId)) {
+      return strategy.loadHistory(conversationId, limit);
+    }
+    // During a temp session: serve persisted history + in-flight mem messages merged
+    const [persisted, temp] = await Promise.all([
+      strategy.loadHistory(conversationId, limit),
+      this.mem.loadHistory(conversationId, limit),
+    ]);
+    return [...persisted, ...temp].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+  }
+
+  override activateTempSession(conversationId: string): Date {
+    const since = new Date();
+    this.tempOverrides.set(conversationId, since);
+    return since;
+  }
+
+  override deactivateTempSession(conversationId: string): Date | null {
+    const since = this.tempOverrides.get(conversationId) ?? null;
+    this.tempOverrides.delete(conversationId);
+    if (since) {
+      void this.mem.deleteMessagesSince(conversationId, since);
+    }
+    return since;
+  }
+
+  override getTempSession(conversationId: string): Date | null {
+    return this.tempOverrides.get(conversationId) ?? null;
   }
 
   async findDirectConversation(
@@ -123,6 +156,12 @@ export class DispatchingChatStrategy extends ChatStorageStrategy {
     const strategy = await this.requireRoute(id);
     await strategy.deleteConversation(id);
     this.routes.delete(id);
+    this.tempOverrides.delete(id);
+  }
+
+  async deleteMessage(conversationId: string, messageId: string, senderId: string): Promise<boolean> {
+    const strategy = await this.requireRoute(conversationId);
+    return strategy.deleteMessage(conversationId, messageId, senderId);
   }
 
   private async resolve(id: string): Promise<ChatStorageStrategy | null> {

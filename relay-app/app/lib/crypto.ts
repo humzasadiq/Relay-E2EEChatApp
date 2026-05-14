@@ -203,3 +203,36 @@ export async function decryptMessage(
   );
   return text(plaintext);
 }
+
+/* ── media encrypt / decrypt (secretbox on raw bytes) ────────────── */
+
+/** Generate a fresh random key for one media file. */
+export async function generateMediaKey(): Promise<string> {
+  await sodiumReady();
+  return b64(sodium.crypto_secretbox_keygen());
+}
+
+export async function encryptBytes(
+  data: Uint8Array,
+  fileKey: string,
+): Promise<{ ciphertext: Uint8Array; nonce: string }> {
+  await sodiumReady();
+  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+  const ciphertext = sodium.crypto_secretbox_easy(data, nonce, fromB64(fileKey));
+  return { ciphertext, nonce: b64(nonce) };
+}
+
+export async function decryptBytes(
+  ciphertext: Uint8Array,
+  nonce: string,
+  fileKey: string,
+): Promise<Uint8Array> {
+  await sodiumReady();
+  const plain = sodium.crypto_secretbox_open_easy(
+    ciphertext,
+    fromB64(nonce),
+    fromB64(fileKey),
+  );
+  if (!plain) throw new Error('Media decryption failed');
+  return plain;
+}

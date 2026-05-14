@@ -42,6 +42,12 @@ export class ChatGateway
     this.chat.messageCreated$.subscribe((event) => {
       this.server.to(event.conversationId).emit('message:new', event.message);
     });
+    this.chat.messageDeleted$.subscribe((event) => {
+      this.server.to(event.conversationId).emit('message:deleted', {
+        messageId: event.messageId,
+        conversationId: event.conversationId,
+      });
+    });
     this.chat.conversationCreated$.subscribe((event) => {
       // Notify each member via their personal room so they can refresh their list
       for (const memberId of event.conv.memberIds) {
@@ -153,6 +159,16 @@ export class ChatGateway
       nonce: payload.nonce,
     });
     return { ok: true, message };
+  }
+
+  @SubscribeMessage('chat:delete-message')
+  async deleteMessage(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() payload: { conversationId: string; messageId: string },
+  ) {
+    const userId = this.requireUser(client);
+    const deleted = await this.chat.deleteMessage(payload.conversationId, payload.messageId, userId);
+    return { ok: deleted };
   }
 
   @SubscribeMessage('temp:toggle')

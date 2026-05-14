@@ -119,6 +119,13 @@ export class DatabaseChatStrategy extends ChatStorageStrategy {
     await this.prisma.conversation.delete({ where: { id } });
   }
 
+  async deleteMessage(conversationId: string, messageId: string, senderId: string): Promise<boolean> {
+    const result = await this.prisma.message.deleteMany({
+      where: { id: messageId, conversationId, senderId },
+    });
+    return result.count > 0;
+  }
+
   async saveConversationKeys(
     conversationId: string,
     wrappedKeys: Record<string, string>,

@@ -54,8 +54,10 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
   }
 
   async saveMessage(input: SaveMessageInput): Promise<StoredMessage> {
-    const bucket = this.messages.get(input.conversationId);
-    if (!bucket) throw new NotFoundException('Conversation not found');
+    if (!this.messages.has(input.conversationId)) {
+      this.messages.set(input.conversationId, []);
+    }
+    const bucket = this.messages.get(input.conversationId)!;
     const msg: StoredMessage = {
       id: randomUUID(),
       conversationId: input.conversationId,
@@ -112,6 +114,15 @@ export class InMemoryChatStrategy extends ChatStorageStrategy {
     this.conversations.delete(id);
     this.messages.delete(id);
     this.wrappedKeys.delete(id);
+  }
+
+  async deleteMessage(conversationId: string, messageId: string, senderId: string): Promise<boolean> {
+    const bucket = this.messages.get(conversationId);
+    if (!bucket) return false;
+    const idx = bucket.findIndex((m) => m.id === messageId && m.senderId === senderId);
+    if (idx === -1) return false;
+    bucket.splice(idx, 1);
+    return true;
   }
 
   async saveConversationKeys(

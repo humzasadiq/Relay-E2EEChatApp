@@ -6,7 +6,7 @@ import {
   type EmojiPickerListEmojiProps,
   type EmojiPickerListRowProps,
 } from "frimousse";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Fragment,
   FormEvent,
@@ -22,6 +22,7 @@ import { useAuth } from "../../../lib/auth-store";
 import { useCallStore } from "../../../lib/call-store";
 import { useChat } from "../../../lib/chat-store";
 import { api, ApiError, Conversation, PublicUser } from "../../../lib/api";
+import { decryptBytes, encryptBytes, generateMediaKey } from "../../../lib/crypto";
 
 /* ── helpers ─────────────────────────────────────────────────────── */
 
@@ -174,7 +175,7 @@ function EmojiPickerPopover({
       ref={ref}
       className="absolute bottom-full mb-2 right-0 z-40 rounded-2xl overflow-hidden shadow-2xl"
       style={{
-        width: 320,
+        width: "min(320px, calc(100vw - 1.5rem))",
         height: 400,
         border: "1px solid var(--border-strong)",
         background: "var(--surface)",
@@ -250,16 +251,159 @@ function EmojiPickerPopover({
   );
 }
 
+/* ── Media message helpers ────────────────────────────────────────── */
+
+interface MediaPayload {
+  type: "media";
+  mediaId: string;
+  fileKey: string;
+  nonce: string;
+  mime: string;
+  name: string;
+  size: number;
+}
+
+function parseMedia(text: string): MediaPayload | null {
+  if (!text.startsWith('{"type":"media"')) return null;
+  try {
+    const p = JSON.parse(text);
+    if (p?.type === "media") return p as MediaPayload;
+  } catch { /* not media */ }
+  return null;
+}
+
+function MediaBubble({
+  payload,
+  mine,
+  token,
+}: {
+  payload: MediaPayload;
+  mine: boolean;
+  token: string;
+}) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const urlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const encrypted = await api.getMediaBytes(token, payload.mediaId);
+        const plain = await decryptBytes(encrypted, payload.nonce, payload.fileKey);
+        const blob = new Blob([plain.buffer as ArrayBuffer], { type: payload.mime });
+        const url = URL.createObjectURL(blob);
+        urlRef.current = url;
+        if (!cancelled) setObjectUrl(url);
+      } catch {
+        if (!cancelled) setFailed(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload.mediaId]);
+
+  const bubbleBg = mine ? "var(--bubble-out)" : "var(--bubble-in)";
+  const bubbleText = mine ? "var(--bubble-out-text)" : "var(--text)";
+  const subText = mine ? "rgba(255,255,255,0.6)" : "var(--muted)";
+  const iconBg = mine ? "rgba(255,255,255,0.15)" : "var(--surface-hover)";
+  const iconColor = mine ? "rgba(255,255,255,0.8)" : "var(--muted)";
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-sm" style={{ background: bubbleBg, minWidth: 140 }}>
+        <div className="w-4 h-4 rounded-full border-2 animate-spin shrink-0" style={{ borderColor: "transparent", borderTopColor: iconColor }} />
+        <span className="text-xs" style={{ color: subText }}>Loading…</span>
+      </div>
+    );
+  }
+  if (failed || !objectUrl) {
+    return (
+      <div className="px-3 py-2 rounded-2xl text-xs" style={{ background: "rgba(239,68,68,0.12)", color: "#f87171" }}>
+        Failed to load file
+      </div>
+    );
+  }
+  if (payload.mime.startsWith("image/")) {
+    return (
+      <div className="rounded-2xl overflow-hidden" style={{ maxWidth: 260 }}>
+        <img src={objectUrl} alt={payload.name} className="block max-w-full" style={{ maxHeight: 300, objectFit: "cover" }} />
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl" style={{ background: bubbleBg, minWidth: 220 }}>
+      <div className="shrink-0 rounded-lg w-9 h-9 flex items-center justify-center" style={{ background: iconBg }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: iconColor }}>
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><polyline points="13 2 13 9 20 9" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium truncate" style={{ color: bubbleText }}>{payload.name}</div>
+        <div className="text-[10px]" style={{ color: subText }}>{(payload.size / 1024).toFixed(0)} KB</div>
+      </div>
+      <a href={objectUrl} download={payload.name} className="shrink-0 rounded-lg w-8 h-8 flex items-center justify-center transition-opacity hover:opacity-75" style={{ background: iconBg }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: iconColor }}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+      </a>
+    </div>
+  );
+}
+
+function FileSizeLimitModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm mx-4 rounded-2xl shadow-2xl flex flex-col items-center text-center overflow-hidden"
+        style={{ background: "linear-gradient(145deg, #1e1f2e, #16172a)", border: "1px solid rgba(255,255,255,0.08)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors text-white/60 text-xl leading-none">×</button>
+        <div className="pt-10 pb-6 px-6 flex flex-col items-center">
+          <div className="relative mb-5">
+            <div className="absolute inset-0 rounded-full blur-2xl" style={{ background: "radial-gradient(circle, #5865f2 0%, transparent 70%)", opacity: 0.7 }} />
+            <div className="relative w-24 h-24 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #5865f2, #9b59b6)" }}>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Uh oh, this file exceeds the size limit.</h2>
+          <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
+            The max file size is 5 MB.
+          </p>
+        </div>
+        <div className="w-full px-6 pb-8">
+          <button onClick={onClose} className="w-full py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-85" style={{ background: "#5865f2" }}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ───────────────────────────────────────────────────── */
 
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { user, accessToken } = useAuth();
   const {
     conversations,
     messagesByConv,
     openConversation,
     sendMessage,
+    deleteMessage,
     markRead,
     tempSessionByConv,
     toggleTempSession,
@@ -273,8 +417,11 @@ export default function ChatPage() {
   const messages = messagesByConv[id] ?? [];
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showFileSizeModal, setShowFileSizeModal] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   const myId = user?.id ?? "";
   const title = conv ? convLabel(conv, myId) : "…";
@@ -374,6 +521,41 @@ export default function ChatPage() {
     setText("");
   };
 
+  const sendMedia = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setShowFileSizeModal(true);
+      return;
+    }
+    if (!accessToken || !id) return;
+    setUploadingMedia(true);
+    try {
+      const fileBytes = new Uint8Array(await file.arrayBuffer());
+      const fileKey = await generateMediaKey();
+      const { ciphertext, nonce } = await encryptBytes(fileBytes, fileKey);
+      const blob = new Blob([ciphertext.buffer as ArrayBuffer], { type: "application/octet-stream" });
+      const { id: mediaId } = await api.uploadMedia(accessToken, blob, {
+        conversationId: id,
+        mime: file.type || "application/octet-stream",
+        size: file.size,
+      });
+      const payload = JSON.stringify({
+        type: "media",
+        mediaId,
+        fileKey,
+        nonce,
+        mime: file.type || "application/octet-stream",
+        name: file.name,
+        size: file.size,
+      });
+      await sendMessage(accessToken, id, payload);
+    } catch (err) {
+      console.error("Media upload failed", err);
+    } finally {
+      setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const appendEmoji = useCallback(
     (emoji: string) => {
       setText((t) => t + emoji);
@@ -385,7 +567,17 @@ export default function ChatPage() {
   return (
     <main className="flex-1 flex flex-col min-h-0">
       {/* Header */}
-      <header className="flex items-center gap-3 px-5 py-3 border-b bg-surface shrink-0" style={{ borderColor: "var(--border)" }}>
+      <header className="flex items-center gap-2 px-3 md:px-5 py-3 border-b bg-surface shrink-0" style={{ borderColor: "var(--border)" }}>
+        {/* Back button — mobile only */}
+        <button
+          onClick={() => router.push("/app")}
+          className="md:hidden w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-muted hover:bg-surface-hover transition-colors"
+          aria-label="Back"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
         <Avatar name={conv ? convAvatarSeed(conv, myId) : title} size={40} variant={conv?.type === "GROUP" ? "pixel" : "beam"} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -615,7 +807,7 @@ export default function ChatPage() {
               <div
                 className={`flex ${mine ? "justify-end" : "justify-start"} ${
                   groupedWithPrev ? "mt-0.5" : "mt-2"
-                }`}
+                } group/msg`}
               >
                 {/* incoming avatar — only show on last in group */}
                 {!mine && (
@@ -626,6 +818,23 @@ export default function ChatPage() {
                       <div className="w-7" />
                     )}
                   </div>
+                )}
+
+                {mine && (
+                  <button
+                    type="button"
+                    onClick={() => accessToken && deleteMessage(accessToken, id, m.id)}
+                    className="md:opacity-0 md:group-hover/msg:opacity-100 self-center mr-1.5 w-6 h-6 shrink-0 rounded-full flex items-center justify-center transition-opacity hover:text-red-400"
+                    style={{ color: "var(--muted)" }}
+                    title="Delete message"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6" /><path d="M14 11v6" />
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                    </svg>
+                  </button>
                 )}
 
                 <div className="flex flex-col max-w-[72%]">
@@ -640,9 +849,27 @@ export default function ChatPage() {
                   )}
 
                   {(() => {
-                    const text = m.text ?? "…";
-                    const emojiOnly = isEmojiOnly(text);
-                    const count = emojiOnly ? emojiCount(text) : 0;
+                    const raw = m.text ?? "…";
+                    const media = parseMedia(raw);
+
+                    if (media && accessToken) {
+                      return (
+                        <div>
+                          <MediaBubble payload={media} mine={mine} token={accessToken} />
+                          {isLastInGroup && (
+                            <div className={`mt-1 flex items-center gap-1 ${mine ? "justify-end" : ""}`}>
+                              <span className="text-[10px]" style={{ color: "var(--muted)" }}>
+                                {created.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                              {mine && <DoubleCheck color="var(--muted)" />}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    const emojiOnly = isEmojiOnly(raw);
+                    const count = emojiOnly ? emojiCount(raw) : 0;
                     const emojiFontSize = count <= 3 ? "2.5rem" : "1.75rem";
 
                     if (emojiOnly) {
@@ -651,12 +878,12 @@ export default function ChatPage() {
                           <TextScramble
                             as="div"
                             className="leading-none select-none"
-                            style={{ fontSize: emojiFontSize }}
+                            style={{ fontSize: emojiFontSize, margin: "10px" }}
                             duration={0.6}
                             speed={0.025}
                             trigger={new Date(m.createdAt).getTime() > pageMountRef.current}
                           >
-                            {text}
+                            {raw}
                           </TextScramble>
                           {isLastInGroup && (
                             <div className={`mt-1 flex items-center gap-1 ${mine ? "justify-end" : ""}`}>
@@ -689,7 +916,7 @@ export default function ChatPage() {
                           speed={0.025}
                           trigger={new Date(m.createdAt).getTime() > pageMountRef.current}
                         >
-                          {text}
+                          {raw}
                         </TextScramble>
                         {isLastInGroup && (
                           <div className={`mt-1 flex items-center gap-1 ${mine ? "justify-end" : ""}`}>
@@ -725,7 +952,7 @@ export default function ChatPage() {
       {/* Input bar */}
       <form
         onSubmit={onSubmit}
-        className="flex items-center gap-2 px-4 py-3 border-t bg-surface shrink-0"
+        className="flex items-center gap-1.5 md:gap-2 px-2 md:px-4 py-3 border-t bg-surface shrink-0"
         style={{ borderColor: "var(--border)" }}
       >
         {/* Emoji button */}
@@ -746,12 +973,50 @@ export default function ChatPage() {
           )}
         </div>
 
+        {/* File attachment button */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingMedia}
+          title="Attach file"
+          className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-hover transition-colors text-muted disabled:opacity-40"
+        >
+          {uploadingMedia ? (
+            <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "var(--border-strong)", borderTopColor: "var(--primary)" }} />
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          )}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) sendMedia(file);
+          }}
+        />
+
         <input
           ref={inputRef}
           type="text"
           placeholder="Message…"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (const item of Array.from(items)) {
+              if (item.kind === "file") {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) sendMedia(file);
+                return;
+              }
+            }
+          }}
           className="flex-1 rounded-full py-2.5 px-5 text-sm outline-none"
           style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
         />
@@ -769,6 +1034,8 @@ export default function ChatPage() {
           </svg>
         </button>
       </form>
+
+      {showFileSizeModal && <FileSizeLimitModal onClose={() => setShowFileSizeModal(false)} />}
     </main>
   );
 }

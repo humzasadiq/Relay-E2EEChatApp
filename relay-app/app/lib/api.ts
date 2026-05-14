@@ -217,4 +217,36 @@ export const api = {
 
   getUserKeys: (accessToken: string, userId: string) =>
     request<PublicKeyBundleResponse>(`/users/${userId}/keys`, { accessToken }),
+
+  uploadMedia: async (
+    accessToken: string,
+    encryptedBlob: Blob,
+    opts: { conversationId: string; mime: string; size: number },
+  ): Promise<{ id: string }> => {
+    const form = new FormData();
+    form.append("file", encryptedBlob, "upload");
+    form.append("conversationId", opts.conversationId);
+    form.append("mime", opts.mime);
+    form.append("size", String(opts.size));
+    const res = await fetch(`${API_URL}/media/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, (body as { message?: string }).message ?? res.statusText);
+    }
+    return res.json();
+  },
+
+  getMediaBytes: async (accessToken: string, mediaId: string): Promise<Uint8Array> => {
+    const res = await fetch(`${API_URL}/media/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      credentials: "include",
+    });
+    if (!res.ok) throw new ApiError(res.status, res.statusText);
+    return new Uint8Array(await res.arrayBuffer());
+  },
 };

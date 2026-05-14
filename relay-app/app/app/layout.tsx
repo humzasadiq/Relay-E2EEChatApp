@@ -19,10 +19,11 @@ export default function AppLayout({
 }) {
   const router = useRouter();
   const { status, user, accessToken, hydrate } = useAuth();
-  const { receive, loadConversations, reset, setTempSession, clearTempSession, removeConversation, activeId } = useChat();
+  const { receive, loadConversations, reset, setTempSession, clearTempSession, removeConversation, removeMessage, activeId } = useChat();
   const { setIncoming, _onAnswer, _onIceCandidate, _cleanup } = useCallStore();
   const pathname = usePathname();
   const isLearn = pathname.startsWith("/app/learn");
+  const isOnChat = pathname.startsWith("/app/chat/");
   const [activeSection, setActiveSection] = useState<"chats" | "calls" | "learn">("chats");
 
   useThemeSync();
@@ -70,6 +71,8 @@ export default function AppLayout({
       removeConversation(d.conversationId);
       if (activeId === d.conversationId) router.replace("/app");
     };
+    const onMessageDeleted = (d: { conversationId: string; messageId: string }) =>
+      removeMessage(d.conversationId, d.messageId);
 
     socket.on("message:new", onMessage);
     socket.on("temp:started", onTempStarted);
@@ -85,6 +88,7 @@ export default function AppLayout({
     socket.on("group:member-added", onMemberAdded);
     socket.on("group:member-removed", onMemberRemoved);
     socket.on("group:kicked", onKicked);
+    socket.on("message:deleted", onMessageDeleted);
     loadConversations(accessToken);
     return () => {
       socket.off("message:new", onMessage);
@@ -101,8 +105,9 @@ export default function AppLayout({
       socket.off("group:member-added", onMemberAdded);
       socket.off("group:member-removed", onMemberRemoved);
       socket.off("group:kicked", onKicked);
+      socket.off("message:deleted", onMessageDeleted);
     };
-  }, [accessToken, receive, loadConversations, setTempSession, clearTempSession, removeConversation, activeId, router, setIncoming, _onAnswer, _onIceCandidate, _cleanup]);
+  }, [accessToken, receive, loadConversations, setTempSession, clearTempSession, removeConversation, removeMessage, activeId, router, setIncoming, _onAnswer, _onIceCandidate, _cleanup]);
 
   useEffect(() => {
     return () => {
@@ -123,17 +128,25 @@ export default function AppLayout({
 
   return (
     <>
-      <div className="fixed inset-0 flex overflow-hidden">
-        {/* Column 1: slim icon nav rail */}
+      <div className="fixed inset-0 flex flex-col md:flex-row overflow-hidden">
+        {/* Desktop: left nav rail */}
         <NavRail active={activeSection} onSelect={setActiveSection} />
 
-        {/* Column 2: conversation sidebar — hidden on the learn page */}
-        {!isLearn && <Sidebar />}
+        {/* Content row */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Sidebar: full-screen on mobile when no chat open; 320px panel on desktop */}
+          {!isLearn && (
+            <div className={`${isOnChat ? "hidden md:flex" : "flex"} flex-col w-full md:w-[320px] md:shrink-0 min-h-0`}>
+              <Sidebar />
+            </div>
+          )}
 
-        {/* Column 3: active chat / learn page / empty state */}
-        <section className="flex-1 flex flex-col min-w-0 bg-background">
-          {children}
-        </section>
+          {/* Main content: hidden on mobile when sidebar is showing */}
+          <section className={`${!isOnChat && !isLearn ? "hidden md:flex" : "flex"} flex-1 flex-col min-w-0 bg-background`}>
+            {children}
+          </section>
+        </div>
+
       </div>
       {/* WebRTC call overlay — renders above everything when a call is active */}
       <CallOverlay />

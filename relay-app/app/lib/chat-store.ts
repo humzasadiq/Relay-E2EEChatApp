@@ -56,6 +56,8 @@ interface ChatState {
     text: string,
   ) => Promise<void>;
   receive: (accessToken: string, message: ChatMessage) => Promise<void>;
+  removeMessage: (conversationId: string, messageId: string) => void;
+  deleteMessage: (accessToken: string, conversationId: string, messageId: string) => void;
   markRead: (conversationId: string) => void;
   setTempSession: (conversationId: string, since: string) => void;
   clearTempSession: (conversationId: string, since: string) => void;
@@ -361,6 +363,21 @@ export const useChat = create<ChatState>((set, get) => ({
         },
       };
     });
+  },
+
+  removeMessage(conversationId, messageId) {
+    set((s) => ({
+      messagesByConv: {
+        ...s.messagesByConv,
+        [conversationId]: (s.messagesByConv[conversationId] ?? []).filter((m) => m.id !== messageId),
+      },
+    }));
+  },
+
+  deleteMessage(accessToken, conversationId, messageId) {
+    get().removeMessage(conversationId, messageId);
+    const socket = getSocket(accessToken);
+    socket.emit('chat:delete-message', { conversationId, messageId });
   },
 
   markRead(conversationId) {

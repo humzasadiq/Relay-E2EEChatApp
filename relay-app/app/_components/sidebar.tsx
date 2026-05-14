@@ -74,7 +74,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="w-[320px] shrink-0 flex flex-col border-r bg-surface" style={{ borderColor: "var(--border)" }}>
+    <div className="w-full md:w-[320px] md:shrink-0 flex flex-col h-full border-r bg-surface" style={{ borderColor: "var(--border)" }}>
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3.5 border-b" style={{ borderColor: "var(--border)" }}>
         <h2 className="text-base font-semibold">Chats</h2>
@@ -184,6 +184,16 @@ export function Sidebar() {
                         )}
                       </div>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
+                        {last?.text?.startsWith('{"type":"media"') ? (
+                          <span className="text-xs text-muted truncate flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                            Media
+                          </span>
+                        ) : (
                         <TextScramble
                           key={last?.id ?? "empty"}
                           as="span"
@@ -194,6 +204,7 @@ export function Sidebar() {
                         >
                           {last?.text ?? (last ? "…" : "No messages yet")}
                         </TextScramble>
+                        )}
                         <div className="flex items-center gap-1 shrink-0">
                           {c.temporary && (
                             <span className="text-[9px] uppercase tracking-widest rounded-full px-1.5 py-0.5" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>
@@ -214,7 +225,7 @@ export function Sidebar() {
                   <button
                     onClick={() => setConfirmDeleteId(c.id)}
                     title="Delete chat"
-                    className="opacity-0 group-hover:opacity-100 mr-3 w-7 h-7 shrink-0 rounded-full flex items-center justify-center transition-opacity"
+                    className="md:opacity-0 md:group-hover:opacity-100 mr-3 w-7 h-7 shrink-0 rounded-full flex items-center justify-center transition-opacity"
                     style={{ color: "var(--muted)" }}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLElement).style.color = "#e53e3e";

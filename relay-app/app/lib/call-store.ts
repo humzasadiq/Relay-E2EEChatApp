@@ -26,10 +26,12 @@ interface CallStore {
   active: ActiveCall | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  callError: string | null;
   /** RTCPeerConnection — not serialized, held by reference */
   _pc: RTCPeerConnection | null;
 
   setIncoming: (call: IncomingCall | null) => void;
+  clearCallError: () => void;
   initiateCall: (
     token: string,
     opts: { conversationId: string; recipientId: string; isVideo: boolean },
@@ -70,14 +72,34 @@ function createPC(
   return pc;
 }
 
+function mediaErrorMessage(err: unknown): string {
+  if (!navigator.mediaDevices) {
+    return "Camera/microphone requires a secure connection (HTTPS). Use a tunnel or deploy to access on mobile.";
+  }
+  if (err instanceof Error) {
+    if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+      return "Permission denied — allow camera/microphone access in your browser settings.";
+    }
+    if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+      return "No camera/microphone found on this device.";
+    }
+    if (err.name === "NotReadableError") {
+      return "Camera/microphone is in use by another app.";
+    }
+  }
+  return "Could not access camera/microphone.";
+}
+
 export const useCallStore = create<CallStore>((set, get) => ({
   incoming: null,
   active: null,
   localStream: null,
   remoteStream: null,
+  callError: null,
   _pc: null,
 
   setIncoming: (call) => set({ incoming: call }),
+  clearCallError: () => set({ callError: null }),
 
   initiateCall: async (token, { conversationId, recipientId, isVideo }) => {
     if (get()._pc) return; // already in a call
@@ -92,9 +114,10 @@ export const useCallStore = create<CallStore>((set, get) => ({
         audio: true,
         video: isVideo,
       });
-    } catch {
+    } catch (err) {
       pc.close();
-      throw new Error("Camera/microphone access denied");
+      set({ callError: mediaErrorMessage(err) });
+      return;
     }
 
     localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
@@ -133,9 +156,10 @@ export const useCallStore = create<CallStore>((set, get) => ({
         audio: true,
         video: incoming.isVideo,
       });
-    } catch {
+    } catch (err) {
       pc.close();
-      throw new Error("Camera/microphone access denied");
+      set({ callError: mediaErrorMessage(err), incoming: null });
+      return;
     }
 
     localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
