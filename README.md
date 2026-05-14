@@ -7,7 +7,7 @@
 ## 1. Clone the repository
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/humzasadiq/Relay-E2EEChatApp
 cd Relay-E2EEChatApp
 ```
 
@@ -48,22 +48,11 @@ JWT_REFRESH_SECRET=change-me
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL=30d
 
-# ── Cloudinary (optional — only needed for media/file uploads) ────────────
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
 ```
-
-#### In-memory mode vs. PostgreSQL mode
-
-| Mode | `DATABASE_URL` | Persistence |
-|---|---|---|
-| In-memory | *(leave empty)* | Data lost on restart |
-| PostgreSQL | full connection string | Persisted to DB |
 
 ### 2.3 Set up PostgreSQL (skip if using in-memory mode)
 
-Install PostgreSQL if it isn't already running, then create the database:
+Install PostgreSQL if it isn't already running, then create the database: (or you can use neondb or supabase)
 
 ```bash
 # Example using psql
@@ -80,11 +69,6 @@ This applies all migrations under `prisma/migrations/` and generates the Prisma 
 
 > For local development you can also use `npx prisma migrate dev` which applies migrations and regenerates the client in one step.
 
-### 2.5 (Optional) Seed / inspect the database
-
-```bash
-# Open Prisma Studio to browse data in the browser
-npx prisma studio
 ```
 
 ### 2.6 Start the backend
@@ -160,24 +144,6 @@ Then open `http://localhost:3000` in your browser.
 
 ---
 
-## 5. Cloudinary setup (optional — media/file uploads)
-
-Cloudinary is only required if you want encrypted file/image sharing.
-
-1. Create a free account at [cloudinary.com](https://cloudinary.com).
-2. From your dashboard copy **Cloud name**, **API Key**, and **API Secret**.
-3. Paste them into `relay-backend/.env`:
-
-```env
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-```
-
-Restart the backend after updating the env file.
-
----
-
 ## 6. Quick reference — all npm scripts
 
 ### Backend (`relay-backend`)
@@ -215,3 +181,5 @@ Ensure `CORS_ORIGIN` in `relay-backend/.env` matches the exact origin of the fro
 
 **`prisma: command not found`**
 Use `npx prisma` — Prisma is a dev dependency and is not installed globally.
+
+
